@@ -26,6 +26,8 @@ python pull_example_data.py
 ```
 
 
+## Code
+
 The processing uses several stages.
 
 ### 1. Data extraction
