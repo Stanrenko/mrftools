@@ -34,14 +34,16 @@ if __name__ == '__main__':
     parser.add_argument(
         '--url',
         type=str,
-        default='https://github.com/Stanrenko/mrf_moco_media_v2/releases/download/v1.0.0/dictionaries.zip',
+        default='https://github.com/Stanrenko/mrftools/releases/download/0.1/rawdata.zip',
         help='Path to the example data zip file.'
     )
+
+    
 
     parser.add_argument(
         '--data_dir',
         type=str,
-        default='.',
+        default='./data',
         help='Path to the data directory.'
     )
 

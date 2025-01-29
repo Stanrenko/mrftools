@@ -22,7 +22,7 @@ conda activate <env>
 Example raw data can be pulled using:
 
 ```
-python pull_example_data.py --url 'https://github.com/Stanrenko/mrf_moco_media_v2/releases/download/v1.0.0/inputs_motion.zip' --data_dir './data'
+python pull_example_data.py
 ```
 
 
