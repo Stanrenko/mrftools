@@ -14,7 +14,7 @@ def main(url: str, data_dir: str):
     print(f'Extracting...')
     members = zip_.infolist()
     for member in members:
-        if member.filename.endswith('.npy') or member.filename.endswith('.pkl') or member.filename.endswith('.dict'):
+        if member.filename.endswith('.npy') or member.filename.endswith('.pkl') or member.filename.endswith('.dict') or member.filename.endswith('.dat'):
             if not os.path.basename(member.filename):
                 # is a directory
                 continue
