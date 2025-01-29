@@ -167,8 +167,8 @@ dependencies:
   - zlib=1.2.13=h5eee18b_1
   - zstd=1.5.6=hc292b87_0
   - pip:
-      - epgpy==3.1.0b0
       - finufft==2.3.1
       - simpleitk==2.4.1
-      - twixtools==1.0
+      # - epgpy==3.1.0b0
+      # - twixtools==1.0
 prefix: /home/slioussarenko/anaconda3/envs/mrftools
