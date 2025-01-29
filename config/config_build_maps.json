@@ -1,0 +1,6 @@
+{
+    "pca":6,
+    "split":100,
+    "useGPU": true,
+    "return_cost":true
+}
