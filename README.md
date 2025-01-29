@@ -1,4 +1,4 @@
-# 2D MRF Fingerprinting using bicomponent dictionary matching
+# 2D MR Fingerprinting using bicomponent dictionary matching
 
 Bicomponent dictionary matching for fast reconstruction of quantitative maps from Siemens raw data ([[1]](#1)).
 
