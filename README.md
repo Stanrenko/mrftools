@@ -1,4 +1,4 @@
-# 2D MRF Fingerprinting using bicomponent dictionary matching
+# 2D MR Fingerprinting using bicomponent dictionary matching
 
 Bicomponent dictionary matching for fast reconstruction of quantitative maps from Siemens raw data ([[1]](#1)).
 
@@ -11,9 +11,9 @@ Bicomponent dictionary matching for fast reconstruction of quantitative maps fro
 
 ## Requirements
 
-After cloning the repository, one should create a conda environment using the environment.yml.
+After cloning the repository, one should create the environment with the dependencies by running the shell script:
 ```
-conda env create --name <env> --file environment.yml
+sh install_mrftools.sh <env>
 conda activate <env>
 ```
 
@@ -25,6 +25,8 @@ Example raw data can be pulled using:
 python pull_example_data.py
 ```
 
+
+## Code
 
 The processing uses several stages.
 
