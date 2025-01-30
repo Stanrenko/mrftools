@@ -357,7 +357,7 @@ if __name__ == '__main__':
     parser_dico.add_argument('--dictconf', type=str,nargs='?', const="dico/mrf_dictconf_Dico2_Invivo.json", default="dico/mrf_dictconf_Dico2_Invivo.json")
     parser_dico.add_argument('--dictconflight', type=str,nargs='?', const="dico/mrf_dictconf_Dico2_Invivo_light_for_matching.json", default="dico/mrf_dictconf_Dico2_Invivo_light_for_matching.json")
     parser_dico.add_argument('--reco', type=float,nargs='?', const=5.0, default=5.0) # seconds
-    parser_dico.add_argument('--echospacing', type=float) # ms
+    parser_dico.add_argument('--echospacing', type=float,nargs='?', const=1.11, default=1.11) # ms
     parser_dico.add_argument('--TI', type=float,nargs='?', const=8.32, default=8.32) # ms 
     
     
