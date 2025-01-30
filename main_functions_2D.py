@@ -28,7 +28,6 @@ def extract_data(filename,dens_adj=True):
         print("Performing radial density adjustment")
         npoint = data.shape[-1]
         density = np.abs(np.linspace(-1, 1, npoint))
-        density = np.abs(np.linspace(-1, 1, npoint))
         density = np.expand_dims(density, tuple(range(data.ndim - 1)))
         data*=density
 
@@ -220,10 +219,10 @@ def build_maps(volumes_all_slices,masks_all_slices,dictfile,dictfile_light,file_
     all_maps: tuple containing for all iterations 
             (maps - dictionary with parameter maps for all keys
              mask - numpy array
-             cost map (OPTIONAL)
+             cost map - numpy array (OPTIONAL)
              phase map - numpy array (OPTIONAL)
              proton density map - numpy array (OPTIONAL)
-             matched_signals - numpy array  (OPTIONAL))
+             matched signals - numpy array  (OPTIONAL))
 
     '''
     with open(file_config,"rb") as file:
@@ -246,10 +245,10 @@ def save_maps(all_maps,file_seqParams,keys = ["ff","wT1","attB1","df"]):
     all_maps - tuple containing for all iterations 
             (maps - dictionary with parameter maps for all keys
              mask - numpy array
-             cost map (OPTIONAL)
+             cost map - numpy array (OPTIONAL)
              phase map - numpy array (OPTIONAL)
              proton density map - numpy array (OPTIONAL)
-             matched_signals - numpy array  (OPTIONAL))
+             matched signals - numpy array  (OPTIONAL))
 
     file_seqParams - file containing acquisition sequence parameters (.pkl)
     keys - parameters for which to generate the .mha
@@ -483,7 +482,7 @@ if __name__ == '__main__':
         TI=args.TI
 
 
-        generate_dictionaries(sequence_file,reco,min_TR_delay,dictconf,dictconf_light,TI=8.32)
+        generate_dictionaries(sequence_file,reco,min_TR_delay,dictconf,dictconf_light,TI=TI)
 
     else:
         raise("Value Error : Unknown Function")
