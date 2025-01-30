@@ -2,7 +2,7 @@ import numpy as np
 import math
 import finufft
 from tqdm import tqdm
-from utils_mrf import groupby
+from .utils_mrf import groupby
 
 class Trajectory(object):
 

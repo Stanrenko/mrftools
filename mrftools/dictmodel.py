@@ -2,6 +2,7 @@
 import pathlib
 import numpy as np
 import pickle
+import json
 import datetime
 from abc import ABC, abstractmethod
 
@@ -85,7 +86,7 @@ def pickle_load(filename):
     """unpickle payload"""
     with open(filename, "rb") as fp:
         return pickle.load(fp)
-
+    
 
 
 """
@@ -176,6 +177,7 @@ class RegressionModel(RegressionModelABC):
     __REQUIRED__ = []
     __LOADER__ = staticmethod(pickle_load)
     __SAVER__ = staticmethod(pickle_save)
+
 
     @property
     def name(self):

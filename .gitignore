@@ -15,3 +15,5 @@ dico/dictionary_6pca.pkl
 data
 __pycache__
 notebooks
+
+*egg*

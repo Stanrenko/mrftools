@@ -1,7 +1,4 @@
-from dictmodel import Dictionary
-import io_twixt
 import numpy as np
-np.bool=np.bool_
 import itertools
 from scipy import ndimage
 from tqdm import tqdm
@@ -9,19 +6,23 @@ import twixtools
 from datetime import datetime
 from copy import copy
 import os
-try:
-    import cupy as cp
-except:
-    print("Could not import cupy")
-    pass
-
 import pickle
 import finufft
 from mpl_toolkits.axes_grid1 import ImageGrid
 from sklearn.base import BaseEstimator, TransformerMixin  # This function just makes sure that the object is fitted
 from sklearn.utils.validation import check_is_fitted
 import matplotlib.pyplot as plt
-# from utils import build_mask_from_volume
+from PIL import Image
+try:
+    import cupy as cp
+except:
+    print("Could not import cupy")
+
+from . import io_twixt
+from .dictmodel import Dictionary
+
+np.bool=np.bool_
+asca = np.ascontiguousarray
 
 
 class PCAComplex(BaseEstimator,TransformerMixin):
@@ -1670,7 +1671,7 @@ def simulate_radial_undersampled_images_multi(kdata, trajectory, size, density_a
     if traj[0].shape[-1] == 2:  # 2D
 
         for i, t in tqdm(enumerate(traj)):
-            fk = finufft.nufft2d1(t[:, 0], t[:, 1], np.squeeze(kdata[:, i, :]), size)
+            fk = finufft.nufft2d1(asca(t[:, 0]), asca(t[:, 1]), asca(np.squeeze(kdata[:, i, :])), size)
 
             # images_series_rebuilt = np.moveaxis(images_series_rebuilt, 0, 1)
             if b1 is None:
@@ -1688,8 +1689,7 @@ def simulate_radial_undersampled_images_multi(kdata, trajectory, size, density_a
 
             for i, t in tqdm(enumerate(traj)):
                 if not (light_memory_usage):
-
-                    fk = finufft.nufft3d1(t[:, 2], t[:, 0], t[:, 1], kdata[:, i, :], size)
+                    fk = finufft.nufft3d1(asca(t[:, 2]), asca(t[:, 0]), asca(t[:, 1]), asca(kdata[:, i, :]), size)
                     if b1 is None:
                         images_series_rebuilt[i] = np.sqrt(np.sum(np.abs(fk) ** 2, axis=0))
                     else:
@@ -1715,7 +1715,9 @@ def simulate_radial_undersampled_images_multi(kdata, trajectory, size, density_a
                         for j in tqdm(range(nb_channels)):
                             print(t.shape)
                             print(kdata[j][i].shape)
-                            fk = finufft.nufft3d1(t[:, 2], t[:, 0], t[:, 1], kdata[j][i], size)
+                            fk = finufft.nufft3d1(
+                                asca(t[:, 2]), asca(t[:, 0]), asca(t[:, 1]), 
+                                asca(kdata[j][i]), size)
                             if b1 is None:
                                 images_series_rebuilt[i - i0] += np.abs(fk) ** 2
                             else:
@@ -1730,10 +1732,10 @@ def simulate_radial_undersampled_images_multi(kdata, trajectory, size, density_a
                             #index_non_zero_kdata=np.nonzero(kdata[j][i])
                             #kdata_current=kdata[j][i][index_non_zero_kdata]
                             #t_current=t[index_non_zero_kdata]
-                            kdata_current = kdata[j][i]
+                            kdata_current = asca(kdata[j][i])
                             #print(t_current.shape)
                             #print(kdata_current.shape)
-                            fk = finufft.nufft3d1(t[:, 2], t[:, 0], t[:, 1], kdata_current, size)
+                            fk = finufft.nufft3d1(asca(t[:, 2]), asca(t[:, 0]), asca(t[:, 1]), kdata_current, size)
                             if b1 is None:
                                 images_series_rebuilt[i] += np.abs(fk) ** 2
                             else:
@@ -1887,6 +1889,7 @@ def list_hdr_keys(hdr,filter,index=-1):
 
 def plot_image_grid(list_images,nb_row_col,figsize=(10,10),title="",cmap=None,save_file=None,same_range=False,aspect=None):
     fig = plt.figure(figsize=figsize)
+
     plt.title(title)
     grid = ImageGrid(fig, 111,  # similar to subplot(111)
                      nrows_ncols=nb_row_col,  # creates 2x2 grid of axes
@@ -1905,7 +1908,19 @@ def plot_image_grid(list_images,nb_row_col,figsize=(10,10),title="",cmap=None,sa
     if save_file is not None:
         plt.savefig(save_file)
     else:
-        plt.show()
+        # plt.show()
+        return fig
+
+
+def volumes_to_gif(volumes, index=None):
+    index = index or slice(None)
+    volslices = [np.abs(vol[index]) for vol in volumes]
+    images = []
+    for i in range(len(volslices)):
+        img = Image.fromarray((volslices[i] / volslices[i].max() * 255).astype('uint8'), 'L')
+        img = img.convert("P")
+        images.append(img)
+    return images  
 
 
 
