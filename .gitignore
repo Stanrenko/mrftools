@@ -12,7 +12,10 @@ dico/dictionary_light.dict
 dico/dictionary_light_vars_simple.pkl
 dico/dictionary_light_6pca_simple.pkl
 dico/dictionary_6pca.pkl
-data
+mrf_dict/
+work/
+data/
+
 __pycache__
 notebooks
 

@@ -8,8 +8,6 @@ from .utils_mrf import *
 from .utils_simu import *
 from .trajectory import Radial
 
-ROOT = pathlib.Path(__file__).parent.parent
-DEFAULT_OPTIM_CONFIG = ROOT / 'resources' / 'config' / 'config_build_maps.json'
 
 def extract_data(filename,dens_adj=True):
     ''' 
@@ -215,7 +213,7 @@ def check_dico(dico_hdr, seqParams):
 
 
 
-def build_maps(volumes_all_slices,masks_all_slices,dictfile,dictfile_light,file_config=DEFAULT_OPTIM_CONFIG):
+def build_maps(volumes_all_slices,masks_all_slices,dictfile,dictfile_light,file_config):
     '''
     builds MRF maps using bi-component dictionary matching (Slioussarenko et al. MRM 2024)
     inputs:
