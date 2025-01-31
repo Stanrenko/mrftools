@@ -1,10 +1,12 @@
 import json
+import pathlib
 import numpy as np
-from dictmodel import Dictionary
 import itertools
 import epgpy as epg
 import pickle
-from utils_mrf import groupby
+
+from .utils_mrf import groupby
+from .dictmodel import Dictionary
 
 
 class T1MRFSS:
@@ -65,7 +67,7 @@ def create_new_seq(FA_list,TE_list,min_TR_delay,TI,FA_factor=5):
 
     return seq_config_new
 
-def generate_epg_dico_T1MRFSS_from_sequence(sequence_config,filedictconf,recovery,rep=2,overwrite=True,sim_mode="mean",start=None,window=None):
+def generate_epg_dico_T1MRFSS_from_sequence(sequence_config,filedictconf,recovery,rep=2,overwrite=True,sim_mode="mean",start=None,window=None, dest=None):
     prefix_dico=str.split(filedictconf,".json")[0]
 
 
@@ -109,6 +111,8 @@ def generate_epg_dico_T1MRFSS_from_sequence(sequence_config,filedictconf,recover
     else:
         dictfile = prefix_dico + "_TR{}_reco{}_start{}.dict".format(str(TR_delay),str(recovery),start)
 
+    if dest is not None:
+        dictfile = str(pathlib.Path(dest) / pathlib.Path(dictfile).name)
     print("Generating dictionary {}".format(dictfile))
 
     # water
