@@ -213,7 +213,7 @@ def check_dico(dico_hdr, seqParams):
 
 
 
-def build_maps(volumes_all_slices,masks_all_slices,dictfile,dictfile_light,file_config):
+def build_maps(volumes_all_slices,masks_all_slices,dictfile,dictfile_light,useGPU=True,split=100,return_cost=False,pca=6):
     '''
     builds MRF maps using bi-component dictionary matching (Slioussarenko et al. MRM 2024)
     inputs:
@@ -222,6 +222,10 @@ def build_maps(volumes_all_slices,masks_all_slices,dictfile,dictfile_light,file_
     dictfile - full dictionary for pattern matching (.dict)
     dictfile_light - coarse dictionary for preliminary clustering (.dict)
     file_config - optimization options
+    useGPU - wheter to use GPU
+    split - signal batch count for memory management (int)
+    return_cost - whether to return additional maps (e.g. proton density, phase and cost)
+    pca - number of temporal pca components retained (int)
 
     outputs:
     all_maps: tuple containing for all iterations 
@@ -233,12 +237,15 @@ def build_maps(volumes_all_slices,masks_all_slices,dictfile,dictfile_light,file_
              matched_signals - numpy array  (OPTIONAL))
 
     '''
-    with open(file_config,"rb") as file:
-        optim_config=json.load(file)
 
-    return_cost=optim_config["return_cost"]
-    optimizer = SimpleDictSearch(mask=masks_all_slices, split=optim_config["split"], pca=True,
-                                             threshold_pca=optim_config["pca"],dictfile_light=dictfile_light,threshold_ff=0.9,return_cost=return_cost)
+    try:
+        import cupy
+    except:
+        print("Could not import cupy - not using gpu")
+        useGPU=False
+
+    optimizer = SimpleDictSearch(mask=masks_all_slices, split=split, pca=True,
+                                             threshold_pca=pca,dictfile_light=dictfile_light,threshold_ff=0.9,return_cost=return_cost,useGPU_dictsearch=useGPU)
             
     all_maps=optimizer.search_patterns_test_multi_2_steps_dico(dictfile,volumes_all_slices)
     

@@ -47,7 +47,11 @@ if __name__ == '__main__':
     parser_maps.add_argument('--fileseq', type=str,nargs='?', const=DATA / "dico_seqParams.pkl", default=DATA / "dico_seqParams.pkl")
     parser_maps.add_argument('--dictdir', type=str, default='./mrf_dict')
     parser_maps.add_argument('--dictfiles', type=str,nargs='?', const="mrf_dictconf_Dico2_Invivo_TR1.11_reco5.0.pkl", default="mrf_dictconf_Dico2_Invivo_TR1.11_reco5.0.pkl")
-    parser_maps.add_argument('--optim-config', type=str, default=CONF / "config_build_maps.json")
+    # parser_maps.add_argument('--optim-config', type=str, default=CONF / "config_build_maps.json")
+    parser_maps.add_argument('--pca', type=int,nargs='?', const=6, default=6)
+    parser_maps.add_argument('--split', type=int,nargs='?', const=100, default=100)
+    parser_maps.add_argument('--useGPU', type=bool,nargs='?', const=True, default=True)
+    parser_maps.add_argument('--returncost', type=bool,nargs='?', const=False, default=False)
 
     parser_dico = subparsers.add_parser('generate_dico')
     parser_dico.add_argument('--dictdir', type=str, default='./mrf_dict')
@@ -153,12 +157,17 @@ if __name__ == '__main__':
         gif[0].save(file_masks_gif,save_all=True, append_images=gif[1:], optimize=False, duration=100, loop=0)
     
     elif args.command=="build_maps":
-        optim_config = args.optim_config
+        # optim_config = args.optim_config
         file_volumes= str(args.filevolumes)
         file_masks=str(args.filemasks)
         file_seq=str(args.fileseq)
         dictdir = pathlib.Path(args.dictdir)
         dictfiles=str(dictdir / args.dictfiles)
+        pca=int(args.pca)
+        split=int(args.split)
+        useGPU=bool(args.useGPU)
+        return_cost=bool(args.returncost)
+        
         print(dictfiles)
         volumes=np.load(file_volumes)
         masks=np.load(file_masks)
@@ -171,7 +180,7 @@ if __name__ == '__main__':
         dico_hdr=dico_full_with_hdr["hdr"]
         
         check_dico(dico_hdr,file_seq)
-        all_maps=build_maps(volumes,masks,dictfile,dictfile_light, file_config=optim_config)
+        all_maps=build_maps(volumes,masks,dictfile,dictfile_light,split=split,pca=pca,useGPU=useGPU,return_cost=return_cost)
         save_maps(all_maps,file_seq)
 
     elif args.command=="generate_dico":
