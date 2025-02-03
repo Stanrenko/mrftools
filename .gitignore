@@ -1,24 +1,11 @@
-dico/mrf_dictconf_SimReco2_light.json
-dico/mrf_dictconf_Dico2_Invivo_TR1.11_reco5.0.pkl
-dico/mrf_dictconf_Dico2_Invivo_TR1.11_reco5.0.dict
-dico/mrf_dictconf_Dico2_Invivo_TR1.11_reco5.0_vars.pkl
-dico/mrf_dictconf_Dico2_Invivo_TR1.11_reco5.0_6pca.pkl
-dico/mrf_dictconf_Dico2_Invivo_light_for_matching_TR1.11_reco5.0.dict
-dico/mrf_dictconf_Dico2_Invivo_light_for_matching_TR1.11_reco5.0_vars_simple.pkl
-dico/mrf_dictconf_Dico2_Invivo_light_for_matching_TR1.11_reco5.0_6pca_simple.pkl
-dico/dictionary.dict
-dico/dictionary_vars.pkl
-dico/dictionary_light.dict
-dico/dictionary_light_vars_simple.pkl
-dico/dictionary_light_6pca_simple.pkl
-dico/dictionary_6pca.pkl
+dico/
 mrf_dict/
 work/
 data/
 
 __pycache__
-notebooks
-resources/config
-resources/dico
+notebooks/
+resources/config/
+resources/dico/
 
 *egg*
