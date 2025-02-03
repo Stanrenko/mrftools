@@ -18,6 +18,7 @@ data/
 
 __pycache__
 notebooks
-resources
+resources/config
+resources/dico
 
 *egg*
