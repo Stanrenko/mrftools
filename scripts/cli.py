@@ -9,8 +9,8 @@ from mrftools.main_functions_2D import *
 
 ROOT = pathlib.Path(__file__).parent.parent
 DATA = ROOT / 'data'
-DICT = ROOT / 'resources' / 'dico'
-CONF = ROOT / 'resources' / 'config'
+DICT = ROOT / 'mrftools' / 'dico_config'
+# CONF = ROOT / 'resources' / 'config'
 
 if __name__ == '__main__':
     
