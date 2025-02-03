@@ -300,29 +300,29 @@ def save_maps(all_maps, file_seqParams, keys = ["ff","wT1","attB1","df"]):
 
 
 
-def generate_dictionaries(sequence_file,reco,min_TR_delay,dictconf,dictconf_light,TI=8.32, dest=None):
+def generate_dictionaries(sequence_file,reco,min_TR_delay,dictconf,dictconf_light,TI=8.32, dest=None,diconame="dico"):
     '''
     Generates dictionaries from sequence and dico configuration files
     inputs:
-    sequence_file - sequence acquistion parameters (.json)
+    sequence_file - sequence acquistion parameters (dictionary)
     reco - waiting time at the end of each MRF repetition (seconds)
     min_TR_delay - waiting time from echo time to next RF pulse (ms)
-    dictconf - dictionary parameter grid for full dictionary (.json)
-    dictconf_light - dictionary parameter grid for light dictionary (.json)
+    dictconf - dictionary parameter grid for full dictionary (dictionary)
+    dictconf_light - dictionary parameter grid for light dictionary (dictionary)
     TI - inversion time (ms)
 
     outputs:
     saves the dictionaries paths and headers in a .pkl file
     '''
-    sequence_file = str(sequence_file)
-    dictconf = str(dictconf)
-    dictconf_light = str(dictconf_light)
+    # sequence_file = str(sequence_file)
+    # dictconf = str(dictconf)
+    # dictconf_light = str(dictconf_light)
 
     _,FA_list,TE_list=load_sequence_file(sequence_file,reco,min_TR_delay/1000)
     seq_config=create_new_seq(FA_list,TE_list,min_TR_delay/1000,TI)
 
-    dictfile,hdr=generate_epg_dico_T1MRFSS_from_sequence(seq_config,dictconf,reco, dest=dest)
-    dictfile_light,hdr_light=generate_epg_dico_T1MRFSS_from_sequence(seq_config,dictconf_light,reco, dest=dest)
+    dictfile,hdr=generate_epg_dico_T1MRFSS_from_sequence(seq_config,dictconf,reco, dest=dest,prefix_dico="{}".format(diconame))
+    dictfile_light,hdr_light=generate_epg_dico_T1MRFSS_from_sequence(seq_config,dictconf_light,reco, dest=dest,prefix_dico="{}_light".format(diconame))
     
     dico_full_with_hdr={"hdr":hdr,
                         "hdr_light":hdr_light,

@@ -3,7 +3,7 @@ import os, sys
 from PIL import Image
 import numpy as np
 import pathlib
-
+from mrftools.config import DICT_CONFIG,DICT_LIGHT_CONFIG,SEQ_CONFIG
 from mrftools.main_functions_2D import *
 
 
@@ -55,9 +55,9 @@ if __name__ == '__main__':
 
     parser_dico = subparsers.add_parser('generate_dico')
     parser_dico.add_argument('--dictdir', type=str, default='./mrf_dict')
-    parser_dico.add_argument('--sequencefile', type=str,nargs='?', const=DICT / "mrf_sequence_adjusted.json", default=DICT / "mrf_sequence_adjusted.json")
-    parser_dico.add_argument('--dictconf', type=str,nargs='?', const=DICT / "mrf_dictconf_Dico2_Invivo.json", default=DICT / "mrf_dictconf_Dico2_Invivo.json")
-    parser_dico.add_argument('--dictconflight', type=str,nargs='?', const=DICT / "mrf_dictconf_Dico2_Invivo_light_for_matching.json", default=DICT / "mrf_dictconf_Dico2_Invivo_light_for_matching.json")
+    parser_dico.add_argument('--sequencefile', type=str,nargs='?', const=None, default=None)
+    parser_dico.add_argument('--dictconf', type=str,nargs='?', const=None, default=None)
+    parser_dico.add_argument('--dictconflight', type=str,nargs='?', const=None, default=None)
     parser_dico.add_argument('--reco', type=float,nargs='?', const=5.0, default=5.0) # seconds
     parser_dico.add_argument('--echospacing', type=float, default=1.11) # ms
     parser_dico.add_argument('--TI', type=float,nargs='?', const=8.32, default=8.32) # ms 
@@ -185,15 +185,25 @@ if __name__ == '__main__':
 
     elif args.command=="generate_dico":
         dictdir = pathlib.Path(args.dictdir)
-        sequence_file= str(args.sequencefile)
+        sequence_file= args.sequencefile
         reco=args.reco
         min_TR_delay=args.echospacing
-        dictconf=str(args.dictconf)
-        dictconf_light=str(args.dictconflight)
+        dictconf=args.dictconf
+        dictconf_light=args.dictconflight
         TI=args.TI
 
+        if sequence_file is None:
+            print("No sequence config was given - using default SEQ_CONFIG")
+            sequence_file=SEQ_CONFIG
+        if dictconf is None:
+            print("No dict config was given - using default DICT_LIGHT")
+            dictconf=DICT_CONFIG
+        if dictconf_light is None:
+            print("No dict light config was given - using default DICT_LIGHT_CONFIG")
+            dictconf_light=DICT_LIGHT_CONFIG        
+
         if dictdir.exists() and list(dictdir.glob('*')):
-            print('Output directory not emtpy. Aborting')
+            print('Output directory {} not emtpy. Aborting'.format(dictdir))
             parser.exit()
         dictdir.mkdir(parents=True, exist_ok=True)
 

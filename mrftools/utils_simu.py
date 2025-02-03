@@ -67,12 +67,14 @@ def create_new_seq(FA_list,TE_list,min_TR_delay,TI,FA_factor=5):
 
     return seq_config_new
 
-def generate_epg_dico_T1MRFSS_from_sequence(sequence_config,filedictconf,recovery,rep=2,overwrite=True,sim_mode="mean",start=None,window=None, dest=None):
-    prefix_dico=str.split(filedictconf,".json")[0]
+def generate_epg_dico_T1MRFSS_from_sequence(sequence_config,filedictconf,recovery,rep=2,overwrite=True,sim_mode="mean",start=None,window=None, dest=None,prefix_dico="dico"):
+    if type(filedictconf)==str:
+        with open(filedictconf) as f:
+            dict_config = json.load(f)
+    
+    elif type(filedictconf)==dict:
+        dict_config=filedictconf
 
-
-    with open(filedictconf) as f:
-        dict_config = json.load(f)
 
 
     # generate signals
@@ -171,8 +173,12 @@ def generate_epg_dico_T1MRFSS_from_sequence(sequence_config,filedictconf,recover
 
 
 def load_sequence_file(fileseq,recovery,min_TR_delay):
-    with open(fileseq, "r") as file:
-        seq_config = json.load(file)
+
+    if type(fileseq)==str:
+        with open(fileseq, "r") as file:
+            seq_config = json.load(file)
+    elif type(fileseq)==dict:
+        seq_config = fileseq
 
     TI = seq_config["TI"] * 10 ** -3
     TE = list(np.array(seq_config["TE"]) * 10 ** -3)
