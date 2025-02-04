@@ -65,12 +65,12 @@ class PCAComplex(BaseEstimator,TransformerMixin):
 
     def transform(self, X):
         try:
-            print("Checking cupy presence")
+            # print("Checking cupy presence")
             import cupy as cp
             xp=cp.get_array_module(X)
-            print("Checked cupy presence")
+            # print("Checked cupy presence")
         except ImportError:
-            print("Not using cupy in PCA transform")
+            # print("Not using cupy in PCA transform")
             xp=np
             cp=None
 
