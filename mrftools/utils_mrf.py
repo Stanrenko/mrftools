@@ -912,7 +912,7 @@ class SimpleDictSearch(Optimizer):
         array_water_unique, index_water_unique = np.unique(array_water, axis=0, return_inverse=True)
         array_fat_unique, index_fat_unique = np.unique(array_fat, axis=0, return_inverse=True)
 
-        if not(type(dicofull_file)==str)or("vars_light" not in dicofull.keys()) or ((pca) and ("pca_light_{}".format(threshold_pca) not in dicofull.keys())) or (calculate_matched_signals):
+        if not(type(dicofull_file)==str)or("vars_light" not in dicofull.keys()) or ((pca) and ("pca_light_{}".format(threshold_pca) not in dicofull.keys())):
 
             array_water_unique, index_water_unique = np.unique(array_water, axis=0, return_inverse=True)
             array_fat_unique, index_fat_unique = np.unique(array_fat, axis=0, return_inverse=True)
