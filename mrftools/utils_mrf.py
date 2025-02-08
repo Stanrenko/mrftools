@@ -855,7 +855,7 @@ class SimpleDictSearch(Optimizer):
         self.paramDict["threshold"]=threshold
 
 
-    def search_patterns_test_multi(self, dictfile, volumes, retained_timesteps=None):
+    def search_patterns_test_multi(self, dicofull_file, volumes, retained_timesteps=None):
 
         if self.mask is None:
             mask = build_mask_from_volume(volumes)
@@ -871,14 +871,14 @@ class SimpleDictSearch(Optimizer):
         useGPU_dictsearch = self.paramDict["useGPU_dictsearch"]
 
         remove_duplicates = self.paramDict["remove_duplicate_signals"]
-        if pca and (type(dictfile)==str):
-            pca_file = str.split(dictfile, ".dict")[0] + "_{}pca_simple.pkl".format(threshold_pca)
-            pca_file_name = str.split(pca_file, "/")[-1]
+        # if pca and (type()==str):
+        #     pca_file = str.split(dictfile, ".dict")[0] + "_{}pca_simple.pkl".format(threshold_pca)
+        #     pca_file_name = str.split(pca_file, "/")[-1]
 
-        if type(dictfile)==str:
-            vars_file = str.split(dictfile, ".dict")[0] + "_vars_simple.pkl".format(threshold_pca)
-            vars_file_name = str.split(vars_file, "/")[-1]
-            path = str.split(os.path.realpath(__file__), "/utils_mrf.py")[0]
+        # if type(dictfile)==str:
+        #     vars_file = str.split(dictfile, ".dict")[0] + "_vars_simple.pkl".format(threshold_pca)
+        #     vars_file_name = str.split(vars_file, "/")[-1]
+        #     path = str.split(os.path.realpath(__file__), "/utils_mrf.py")[0]
 
         if volumes.ndim > 2:
             all_signals = volumes[:, mask > 0]
@@ -890,9 +890,10 @@ class SimpleDictSearch(Optimizer):
 
         del volumes
 
-        if type(dictfile) == str:
-            mrfdict = Dictionary()
-            mrfdict.load(dictfile, force=True)
+        if type(dicofull_file) == str:
+            with open(dicofull_file, "rb") as file:
+                dicofull = pickle.load(file)
+            mrfdict = dicofull["mrfdict_light"]
 
             keys = mrfdict.keys
             array_water = mrfdict.values[:, :, 0]
@@ -900,9 +901,9 @@ class SimpleDictSearch(Optimizer):
 
             del mrfdict
         else:  # otherwise dictfile contains (s_w,s_f,keys)
-            array_water = dictfile[0]
-            array_fat = dictfile[1]
-            keys = dictfile[2]
+            array_water = dicofull["light"][0]
+            array_fat = dicofull["light"][1]
+            keys = dicofull["light"][2]
 
         if retained_timesteps is not None:
             array_water = array_water[:, retained_timesteps]
@@ -911,7 +912,7 @@ class SimpleDictSearch(Optimizer):
         array_water_unique, index_water_unique = np.unique(array_water, axis=0, return_inverse=True)
         array_fat_unique, index_fat_unique = np.unique(array_fat, axis=0, return_inverse=True)
 
-        if not(type(dictfile)==str)or(vars_file_name not in os.listdir(path)) or ((pca) and (pca_file_name not in os.listdir(path))):
+        if not(type(dicofull_file)==str)or("vars_light" not in dicofull.keys()) or ((pca) and ("pca_light_{}".format(threshold_pca) not in dicofull.keys())) or (calculate_matched_signals):
 
             array_water_unique, index_water_unique = np.unique(array_water, axis=0, return_inverse=True)
             array_fat_unique, index_fat_unique = np.unique(array_fat, axis=0, return_inverse=True)
@@ -922,7 +923,7 @@ class SimpleDictSearch(Optimizer):
         del array_fat
 
         if pca:
-            if not(type(dictfile)==str) or(pca_file_name not in os.listdir(path)):
+            if not(type(dicofull_file)==str) or ("pca_light_{}".format(threshold_pca) not in dicofull.keys()):
                 pca_water = PCAComplex(n_components_=threshold_pca)
                 pca_fat = PCAComplex(n_components_=threshold_pca)
 
@@ -931,21 +932,22 @@ class SimpleDictSearch(Optimizer):
 
                 transformed_array_water_unique = pca_water.transform(array_water_unique)
                 transformed_array_fat_unique = pca_fat.transform(array_fat_unique)
-                if type(dictfile) == str:
-                    with open(pca_file,"wb") as file:
-                        pickle.dump((pca_water,pca_fat,transformed_array_water_unique,transformed_array_fat_unique),file)
+                if type(dicofull_file) == str:
+                    dicofull["pca_light_{}".format(threshold_pca)] = (pca_water, pca_fat, transformed_array_water_unique, transformed_array_fat_unique)
+                    with open(dicofull_file, "wb") as file:
+                        pickle.dump(dicofull, file)
+
             else:
                 print("Loading pca")
-                with open(pca_file, "rb") as file:
-                    (pca_water, pca_fat, transformed_array_water_unique, transformed_array_fat_unique)=pickle.load(file)
-
+                (pca_water, pca_fat, transformed_array_water_unique, transformed_array_fat_unique)=dicofull["pca_light_{}".format(threshold_pca)]
+ 
         else:
             pca_water = None
             pca_fat = None
             transformed_array_water_unique = None
             transformed_array_fat_unique = None
 
-        if not(type(dictfile)==str) or (vars_file_name not in os.listdir(path)):
+        if not(type(dicofull_file)==str) or ("vars_light" not in dicofull.keys()):
             var_w = np.sum(array_water_unique * array_water_unique.conj(), axis=1).real
             var_f = np.sum(array_fat_unique * array_fat_unique.conj(), axis=1).real
             sig_wf = np.sum(array_water_unique[index_water_unique] * array_fat_unique[index_fat_unique].conj(),
@@ -957,13 +959,14 @@ class SimpleDictSearch(Optimizer):
             var_w = np.reshape(var_w, (-1, 1))
             var_f = np.reshape(var_f, (-1, 1))
             sig_wf = np.reshape(sig_wf, (-1, 1))
-            if type(dictfile) == str:
-                with open(vars_file,"wb") as file:
-                    pickle.dump((var_w,var_f,sig_wf,index_water_unique,index_fat_unique),file)
+            if type(dicofull_file) == str:
+                dicofull["vars_light"] = (var_w, var_f, sig_wf, index_water_unique, index_fat_unique)
+                with open(dicofull_file, "wb") as file:
+                    pickle.dump(dicofull, file)
+                
         else:
             print("Loading var w / var f / sig wf")
-            with open(vars_file, "rb") as file:
-                (var_w, var_f, sig_wf,index_water_unique,index_fat_unique)=pickle.load(file)
+            (var_w, var_f, sig_wf, index_water_unique, index_fat_unique)=dicofull["vars_light"] 
 
         if useGPU_dictsearch:
             var_w = cp.asarray(var_w)
@@ -1017,7 +1020,7 @@ class SimpleDictSearch(Optimizer):
 
 
 
-    def search_patterns_test_multi_2_steps_dico(self, dictfile, volumes, retained_timesteps=None):
+    def search_patterns_test_multi_2_steps_dico(self, dicofull_file, volumes, retained_timesteps=None):
 
         if self.mask is None:
             mask = build_mask_from_volume(volumes)
@@ -1045,7 +1048,7 @@ class SimpleDictSearch(Optimizer):
         threshold_pca=np.minimum(ntimesteps,threshold_pca)
 
         threshold_ff=self.paramDict["threshold_ff"]
-        dictfile_light=self.paramDict["dictfile_light"]
+        # dictfile_light=self.paramDict["dictfile_light"]
 
         if "return_cost" not in self.paramDict:
             self.paramDict["return_cost"]=False
@@ -1066,17 +1069,17 @@ class SimpleDictSearch(Optimizer):
         useGPU_dictsearch = self.paramDict["useGPU_dictsearch"]
 
 
-        if pca and (type(dictfile)==str):
-            pca_file = str.split(dictfile, ".dict")[0] + "_{}pca.pkl".format(threshold_pca)
-            pca_file_name = str.split(pca_file, "/")[-1]
+        # if pca and (type(dictfile)==dict):
+        #     pca_file = str.split(dictfile, ".dict")[0] + "_{}pca.pkl".format(threshold_pca)
+        #     pca_file_name = str.split(pca_file, "/")[-1]
 
-        if type(dictfile)==str:
-            vars_file = str.split(dictfile, ".dict")[0] + "_vars.pkl".format(threshold_pca)
-            vars_file_name=str.split(vars_file,"/")[-1]
-            path=str.split(os.path.realpath(__file__),"/utils_mrf.py")[0]
+        # if type(dictfile)==str:
+        #     vars_file = str.split(dictfile, ".dict")[0] + "_vars.pkl".format(threshold_pca)
+        #     vars_file_name=str.split(vars_file,"/")[-1]
+        #     path=str.split(os.path.realpath(__file__),"/utils_mrf.py")[0]
 
-        print(path)
-        print(vars_file_name)
+        # print(path)
+        # print(vars_file_name)
         if volumes.ndim > 2:
             
             all_signals = volumes[:, mask > 0]
@@ -1091,9 +1094,11 @@ class SimpleDictSearch(Optimizer):
 
         del volumes
 
-        if type(dictfile) == str:
-            mrfdict = Dictionary()
-            mrfdict.load(dictfile, force=True)
+        if type(dicofull_file) == str:
+            with open(dicofull_file, "rb") as file:
+                dicofull = pickle.load(file)
+            mrfdict = dicofull["mrfdict"]
+            # mrfdict.load(dictfile, force=True)
 
             keys = mrfdict.keys
             array_water = mrfdict.values[:, :, 0]
@@ -1101,24 +1106,24 @@ class SimpleDictSearch(Optimizer):
             keys=np.array(keys)
 
             del mrfdict
-        else:  # otherwise dictfile contains (s_w,s_f,keys)
-            array_water = dictfile[0]
-            array_fat = dictfile[1]
-            keys = dictfile[2]
+        else:  # otherwise dictfile contains {"full":(s_w,s_f,keys),"light":(s_w_light,s_f_light,keys_light)}
+            array_water = dicofull_file["full"][0]
+            array_fat = dicofull_file["full"][1]
+            keys = dicofull_file["full"][2]
             keys=np.array(keys)
 
         if retained_timesteps is not None:
             array_water = array_water[:, retained_timesteps]
             array_fat = array_fat[:, retained_timesteps]
 
-        if not(type(dictfile)==str)or(vars_file_name not in os.listdir(path)) or ((pca) and (pca_file_name not in os.listdir(path))) or (calculate_matched_signals):
+        if not(type(dicofull_file)==str)or("vars" not in dicofull.keys()) or ((pca) and ("pca_{}".format(threshold_pca) not in dicofull.keys())) or (calculate_matched_signals):
 
             # print("Calculating unique dico signals")
             array_water_unique, index_water_unique = np.unique(array_water, axis=0, return_inverse=True)
             array_fat_unique, index_fat_unique = np.unique(array_fat, axis=0, return_inverse=True)
 
 
-        if not(type(dictfile)==str) or (vars_file_name not in os.listdir(path)):
+        if not(type(dicofull_file)==str) or ("vars" not in dicofull.keys()):
 
             var_w_total = np.sum(array_water_unique * array_water_unique.conj(), axis=1).real
             var_f_total = np.sum(array_fat_unique * array_fat_unique.conj(), axis=1).real
@@ -1129,17 +1134,18 @@ class SimpleDictSearch(Optimizer):
             var_w_total = np.reshape(var_w_total, (-1, 1))
             var_f_total = np.reshape(var_f_total, (-1, 1))
             sig_wf_total = np.reshape(sig_wf_total, (-1, 1))
-            if type(dictfile)==str:
-                with open(vars_file,"wb") as file:
-                    pickle.dump((var_w_total,var_f_total,sig_wf_total,index_water_unique,index_fat_unique),file)
-
+            
+            if type(dicofull_file)==str:
+                dicofull["vars"]=(var_w_total,var_f_total,sig_wf_total,index_water_unique,index_fat_unique)
+                with open(dicofull_file,"wb") as file:
+                    pickle.dump(dicofull,file)
         else:
             print("Loading var w / var f / sig wf")
-            with open(vars_file, "rb") as file:
-                (var_w_total,var_f_total,sig_wf_total,index_water_unique,index_fat_unique)=pickle.load(file)
+            
+            (var_w_total,var_f_total,sig_wf_total,index_water_unique,index_fat_unique)=dicofull["vars"]
 
         if pca:
-            if not(type(dictfile)==str) or (pca_file_name not in os.listdir(path)):
+            if not(type(dicofull_file)==str) or ("pca_{}".format(threshold_pca) not in dicofull.keys()):
                 pca_water = PCAComplex(n_components_=threshold_pca)
                 pca_fat = PCAComplex(n_components_=threshold_pca)
 
@@ -1148,15 +1154,14 @@ class SimpleDictSearch(Optimizer):
 
                 transformed_array_water_unique = pca_water.transform(array_water_unique)
                 transformed_array_fat_unique = pca_fat.transform(array_fat_unique)
-                if type(dictfile) == str:
-                    with open(pca_file,"wb") as file:
-                        pickle.dump((pca_water,pca_fat,transformed_array_water_unique,transformed_array_fat_unique),file)
-
+                if type(dicofull_file) == str:
+                    dicofull["pca_{}".format(threshold_pca)]=(pca_water,pca_fat,transformed_array_water_unique,transformed_array_fat_unique)    
+                    with open(dicofull_file,"wb") as file:
+                        pickle.dump(dicofull,file)
+                    
             else:
                 print("Loading pca")
-                with open(pca_file, "rb") as file:
-                    (pca_water, pca_fat, transformed_array_water_unique, transformed_array_fat_unique)=pickle.load(file)
-
+                (pca_water, pca_fat, transformed_array_water_unique, transformed_array_fat_unique)=dicofull["pca_{}".format(threshold_pca)] 
         else:
             pca_water = None
             pca_fat = None
@@ -1182,7 +1187,7 @@ class SimpleDictSearch(Optimizer):
             self.paramDict["return_matched_signals"]=False
 
             print("Preliminary dictionary matching for clustering")
-            all_maps_bc_cf_light = self.search_patterns_test_multi(dictfile_light,all_signals)
+            all_maps_bc_cf_light = self.search_patterns_test_multi(dicofull_file,all_signals)
 
             self.paramDict["return_matched_signals"] = return_matched_signals_backup
 
@@ -1315,10 +1320,10 @@ class SimpleDictSearch(Optimizer):
 
 
             if calculate_matched_signals:
-                all_maps,matched_signals = self.search_patterns_test_multi(dictfile_light,all_signals)
+                all_maps,matched_signals = self.search_patterns_test_multi(dicofull_file,all_signals)
 
             else:
-                all_maps = self.search_patterns_test_multi(dictfile_light,all_signals)
+                all_maps = self.search_patterns_test_multi(dicofull_file,all_signals)
 
             map_rebuilt=all_maps[0][0]
             mask=all_maps[0][1]

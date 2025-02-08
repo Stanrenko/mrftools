@@ -175,12 +175,11 @@ if __name__ == '__main__':
         with open(dictfiles,"rb") as file:
             dico_full_with_hdr=pickle.load(file)
         
-        dictfile=dico_full_with_hdr["dictfile"]
-        dictfile_light=dico_full_with_hdr["dictfile_light"]
+        # dictfile_light=dico_full_with_hdr["dictfile_light"]
         dico_hdr=dico_full_with_hdr["hdr"]
         
         check_dico(dico_hdr,file_seq)
-        all_maps=build_maps(volumes,masks,dictfile,dictfile_light,split=split,pca=pca,useGPU=useGPU,return_cost=return_cost)
+        all_maps=build_maps(volumes,masks,dictfiles,split=split,pca=pca,useGPU=useGPU,return_cost=return_cost)
         save_maps(all_maps,file_seq)
 
     elif args.command=="generate_dico":

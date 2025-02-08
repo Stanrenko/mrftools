@@ -213,14 +213,13 @@ def check_dico(dico_hdr, seqParams):
 
 
 
-def build_maps(volumes_all_slices,masks_all_slices,dictfile,dictfile_light,useGPU=True,split=100,return_cost=False,pca=6):
+def build_maps(volumes_all_slices,masks_all_slices,dico_full_file,useGPU=True,split=100,return_cost=False,pca=6):
     '''
     builds MRF maps using bi-component dictionary matching (Slioussarenko et al. MRM 2024)
     inputs:
     volumes_all_slices - time serie of undersampled volumes size ntimesteps x nb_slices x npoint/2 x npoint/2 (numpy array)
     masks_all_slices - mask of size nb_slices x npoint/2 x npoint/2 (numpy array)
-    dictfile - full dictionary for pattern matching (.dict)
-    dictfile_light - coarse dictionary for preliminary clustering (.dict)
+    dico_full_file - light and full dictionaries with headers (.pkl)
     file_config - optimization options
     useGPU - wheter to use GPU
     split - signal batch count for memory management (int)
@@ -245,9 +244,9 @@ def build_maps(volumes_all_slices,masks_all_slices,dictfile,dictfile_light,useGP
         useGPU=False
 
     optimizer = SimpleDictSearch(mask=masks_all_slices, split=split, pca=True,
-                                             threshold_pca=pca,dictfile_light=dictfile_light,threshold_ff=0.9,return_cost=return_cost,useGPU_dictsearch=useGPU)
+                                             threshold_pca=pca,threshold_ff=0.9,return_cost=return_cost,useGPU_dictsearch=useGPU)
             
-    all_maps=optimizer.search_patterns_test_multi_2_steps_dico(dictfile,volumes_all_slices)
+    all_maps=optimizer.search_patterns_test_multi_2_steps_dico(dico_full_file,volumes_all_slices)
     
     return all_maps
 
@@ -321,13 +320,13 @@ def generate_dictionaries(sequence_file,reco,min_TR_delay,dictconf,dictconf_ligh
     _,FA_list,TE_list=load_sequence_file(sequence_file,reco,min_TR_delay/1000)
     seq_config=create_new_seq(FA_list,TE_list,min_TR_delay/1000,TI)
 
-    dictfile,hdr=generate_epg_dico_T1MRFSS_from_sequence(seq_config,dictconf,reco, dest=dest,prefix_dico="{}".format(diconame))
-    dictfile_light,hdr_light=generate_epg_dico_T1MRFSS_from_sequence(seq_config,dictconf_light,reco, dest=dest,prefix_dico="{}_light".format(diconame))
+    mrfdict,hdr,dictfile=generate_epg_dico_T1MRFSS_from_sequence(seq_config,dictconf,reco, dest=dest,prefix_dico="{}".format(diconame))
+    mrfdict_light,hdr_light,dictfile_light=generate_epg_dico_T1MRFSS_from_sequence(seq_config,dictconf_light,reco, dest=dest,prefix_dico="{}_light".format(diconame))
     
     dico_full_with_hdr={"hdr":hdr,
                         "hdr_light":hdr_light,
-                        "dictfile":dictfile,
-                        "dictfile_light":dictfile_light}
+                        "mrfdict":mrfdict,
+                        "mrfdict_light":mrfdict_light}
     
     dico_full_name = str.split(dictfile,".dict")[0]+".pkl"
     with open(dico_full_name,"wb") as file:
