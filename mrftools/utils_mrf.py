@@ -1032,9 +1032,6 @@ class SimpleDictSearch(Optimizer):
         if "clustering" not in self.paramDict:
             self.paramDict["clustering"]=True
 
-        
-
-
         split = self.paramDict["split"]
         pca = self.paramDict["pca"]
 

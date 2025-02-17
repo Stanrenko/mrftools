@@ -287,7 +287,7 @@ def save_maps(all_maps, file_seqParams, keys = ["ff","wT1","attB1","df"]):
         map_rebuilt = all_maps[0][0]
         mask = all_maps[0][1]
         map_all_slices = makevol(map_rebuilt[k], mask > 0)            
-        map_all_slices,geom=convertArrayToImageHelper(dico_seqParams,map_all_slices)
+        map_all_slices,geom=convertArrayToImageHelper(dico_seqParams,map_all_slices,apply_offset=True)
         curr_volume=sitk.GetImageFromArray(map_all_slices)
         
         curr_volume.SetSpacing(geom["spacing"])
