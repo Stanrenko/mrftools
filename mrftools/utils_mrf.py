@@ -352,7 +352,6 @@ def match_signals_v2(all_signals,keys,pca_water,pca_fat,array_water_unique,array
 
 
         else:
-            print("I am here")
             if verbose:
                 print("Calculating alpha optim and flooring")
                 start = datetime.now()
@@ -1010,15 +1009,6 @@ class SimpleDictSearch(Optimizer):
 
         values_results = []
         keys_results = list(range(1))
-
-        print(all_signals.shape)
-        print(array_water_unique.shape)
-        print(array_fat_unique.shape)
-        print(transformed_array_water_unique.shape)
-        print(transformed_array_fat_unique.shape)
-        print(var_w.shape)
-        print(var_f.shape)
-        print(sig_wf.shape)
         
 
         print("Calculating optimal fat fraction and best pattern per signal")

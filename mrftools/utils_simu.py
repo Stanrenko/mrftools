@@ -11,8 +11,6 @@ from .dictmodel import Dictionary
 
 class T1MRFSS:
     def __init__(self, FA, TI, TE, TR, B1,T_recovery,nrep,rep=None):
-        print(T_recovery)
-        print(nrep)
         """ build sequence """
         seqlen = len(TE)
         self.TR=TR
@@ -88,13 +86,11 @@ def generate_epg_dico_T1MRFSS_from_sequence(sequence_config,filedictconf,recover
     # df = np.linspace(-0.1, 0.1, 101)
 
     TR_total = np.sum(sequence_config["TR"])
-    print(TR_total)
 
     sequence_config["T_recovery"] = recovery*1000
     sequence_config["nrep"] = rep
 
     TR_delay=np.round(sequence_config["TR"][0]-sequence_config["TE"][0],2)
-    print(TR_delay)
 
     seq = T1MRFSS(**sequence_config)
 
@@ -139,12 +135,8 @@ def generate_epg_dico_T1MRFSS_from_sequence(sequence_config,filedictconf,recover
     # merge df and fat_cs df to dict
     fatdf = [[cs + f for cs in fat_cs] for f in df]
     fat = seq(T1=[fT1], T2=fT2, att=[[att]], g=[[[fatdf]]])#, eval=eval, args=args)
-    print(fat.shape)
-    print(fat_amp.shape)
     fat=fat @ fat_amp
     fat = fat.reshape((rep, -1) + fat.shape[1:])[-1]
-
-    print(fat.shape)
 
     if sim_mode == "mean":
         fat = [np.mean(gp, axis=0) for gp in groupby(fat, window)]
@@ -162,7 +154,6 @@ def generate_epg_dico_T1MRFSS_from_sequence(sequence_config,filedictconf,recover
     keys = list(itertools.product(wT1, fT1, att, df))
     values = np.stack(np.broadcast_arrays(water, fat), axis=-1)
     values = np.moveaxis(values.reshape(len(values), -1, 2), 0, 1)
-    print(values.shape)
 
     print("Save dictionary.")
     mrfdict = Dictionary(keys, values)
