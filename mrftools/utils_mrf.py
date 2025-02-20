@@ -13,6 +13,10 @@ from sklearn.base import BaseEstimator, TransformerMixin  # This function just m
 from sklearn.utils.validation import check_is_fitted
 import matplotlib.pyplot as plt
 from PIL import Image
+import pywt
+import dask.array as da
+from skimage.util import view_as_windows
+
 try:
     import cupy as cp
 except:
@@ -101,31 +105,46 @@ class PCAComplex(BaseEstimator,TransformerMixin):
 
 
 
-def read_mrf_dict(dict_file ,FF_list ,aggregate_components=True):
+def combine_mrf_dict_components(mrfdict ,FF_list ,aggregate_components=True):
+    '''
+    Combine the water and fat components of the dictionary with FF_list to create a single dictionary with all the FFs
+    '''
 
-    mrfdict = Dictionary()
-    mrfdict.load(dict_file, force=True)
+    ff = np.zeros(mrfdict.values.shape[:-1 ] +(len(FF_list),))
+    ff_matrix =np.tile(np.array(FF_list) ,ff.shape[:-1 ] +(1,))
 
-    if aggregate_components :
+    water_signal =np.expand_dims(mrfdict.values[: ,: ,0] ,axis=-1 ) *(1-ff_matrix)
+    fat_signal =np.expand_dims(mrfdict.values[: ,: ,1] ,axis=-1 ) *(ff_matrix)
 
-        ff = np.zeros(mrfdict.values.shape[:-1 ] +(len(FF_list),))
-        ff_matrix =np.tile(np.array(FF_list) ,ff.shape[:-1 ] +(1,))
+    signal =water_signal +fat_signal
 
-        water_signal =np.expand_dims(mrfdict.values[: ,: ,0] ,axis=-1 ) *(1-ff_matrix)
-        fat_signal =np.expand_dims(mrfdict.values[: ,: ,1] ,axis=-1 ) *(ff_matrix)
+    signal_reshaped =np.moveaxis(signal ,-1 ,-2)
+    signal_reshaped =signal_reshaped.reshape((-1 ,signal_reshaped.shape[-1]))
 
-        signal =water_signal +fat_signal
+    keys_with_ff = list(itertools.product(mrfdict.keys, FF_list))
+    keys_with_ff = [(*res, f) for res, f in keys_with_ff]
 
-        signal_reshaped =np.moveaxis(signal ,-1 ,-2)
-        signal_reshaped =signal_reshaped.reshape((-1 ,signal_reshaped.shape[-1]))
+    return keys_with_ff,signal_reshaped
 
-        keys_with_ff = list(itertools.product(mrfdict.keys, FF_list))
-        keys_with_ff = [(*res, f) for res, f in keys_with_ff]
 
-        return keys_with_ff,signal_reshaped
+def build_phi(mrfdict,FFs=np.arange(0.1,1.09,0.1)):
 
-    else:
-        return mrfdict.keys,mrfdict.values
+    #mrfdict = dictsearch.Dictionary()
+    print("Generating full dictionary")
+    keys,values=combine_mrf_dict_components(mrfdict,FFs)
+
+    import dask.array as da
+    print("Performing svd")
+    u,s,vh = da.linalg.svd(da.asarray(values))
+
+    print("SVD done")
+    vh=np.array(vh)
+    s=np.array(s)
+
+    # phi=vh[:L0]
+    #phi=vh
+
+    return vh
 
 
 
@@ -840,19 +859,24 @@ class Optimizer(object):
 
 class SimpleDictSearch(Optimizer):
 
-    def __init__(self,niter=0,seq=None,split=500,pca=True,threshold_pca=15,useGPU_dictsearch=False,remove_duplicate_signals=False,threshold=None,return_matched_signals=False,**kwargs):
+    def __init__(self,niter=0,seq=None,split=500,pca=True,threshold_pca=15,useGPU_dictsearch=False,remove_duplicate_signals=False,threshold=None,return_matched_signals=False,volumes_type="raw",**kwargs):
         
         super().__init__(**kwargs)
         self.paramDict["niter"]=niter
         self.paramDict["split"] = split
         self.paramDict["pca"] = pca
-        self.paramDict["threshold_pca"] = threshold_pca
+        self.paramDict["threshold_pca"] = int(threshold_pca)
         self.paramDict["remove_duplicate_signals"] = remove_duplicate_signals
         self.paramDict["return_matched_signals"] = return_matched_signals
 
 
         self.paramDict["useGPU_dictsearch"]=useGPU_dictsearch
         self.paramDict["threshold"]=threshold
+
+        if volumes_type not in ["singular", "raw"]:
+            raise ValueError('volumes_type must be either "singular" or "raw".')
+        
+        self.paramDict["volumes_type"]=volumes_type
 
 
     def search_patterns_test_multi(self, dicofull_file, volumes, retained_timesteps=None):
@@ -861,6 +885,9 @@ class SimpleDictSearch(Optimizer):
             mask = build_mask_from_volume(volumes)
         else:
             mask = self.mask
+
+        volumes_type=self.paramDict["volumes_type"]
+        
 
         verbose = self.verbose
         niter = 0
@@ -885,14 +912,17 @@ class SimpleDictSearch(Optimizer):
         else:  # already masked
             all_signals = volumes
 
+        ntimesteps=volumes.shape[0]
+
         all_signals=all_signals.astype("complex64")
 
 
         del volumes
 
-        if type(dicofull_file) == str:
-            with open(dicofull_file, "rb") as file:
+        with open(dicofull_file, "rb") as file:
                 dicofull = pickle.load(file)
+
+        if volumes_type == "raw":
             mrfdict = dicofull["mrfdict_light"]
 
             keys = mrfdict.keys
@@ -900,19 +930,25 @@ class SimpleDictSearch(Optimizer):
             array_fat = mrfdict.values[:, :, 1]
 
             del mrfdict
-        else:  # otherwise dictfile contains (s_w,s_f,keys)
-            array_water = dicofull["light"][0]
-            array_fat = dicofull["light"][1]
-            keys = dicofull["light"][2]
+        elif volumes_type=="singular":  # otherwise dictfile contains (s_w,s_f,keys)
+            array_water = dicofull["mrfdict_light_L0{}".format(threshold_pca)][0]
+            array_fat = dicofull["mrfdict_light_L0{}".format(threshold_pca)][1]
+            keys = dicofull["mrfdict_light_L0{}".format(threshold_pca)][2]
 
         if retained_timesteps is not None:
             array_water = array_water[:, retained_timesteps]
             array_fat = array_fat[:, retained_timesteps]
 
+        ntimesteps_dico=array_water.shape[-1]
+
+        if not(ntimesteps_dico==ntimesteps):
+            raise ValueError("The dictionary and the incoming signal did not have the same number of timesteps: ntimesteps_dico {} != ntimesteps_signal {}".format(ntimesteps_dico,ntimesteps))
+
+
         array_water_unique, index_water_unique = np.unique(array_water, axis=0, return_inverse=True)
         array_fat_unique, index_fat_unique = np.unique(array_fat, axis=0, return_inverse=True)
 
-        if not(type(dicofull_file)==str)or("vars_light" not in dicofull.keys()) or ((pca) and ("pca_light_{}".format(threshold_pca) not in dicofull.keys())):
+        if not(volumes_type=="raw")or("vars_light" not in dicofull.keys()) or ((pca) and ("pca_light_{}".format(threshold_pca) not in dicofull.keys())):
 
             array_water_unique, index_water_unique = np.unique(array_water, axis=0, return_inverse=True)
             array_fat_unique, index_fat_unique = np.unique(array_fat, axis=0, return_inverse=True)
@@ -923,7 +959,7 @@ class SimpleDictSearch(Optimizer):
         del array_fat
 
         if pca:
-            if not(type(dicofull_file)==str) or ("pca_light_{}".format(threshold_pca) not in dicofull.keys()):
+            if not(volumes_type=="raw") or ("pca_light_{}".format(threshold_pca) not in dicofull.keys()):
                 pca_water = PCAComplex(n_components_=threshold_pca)
                 pca_fat = PCAComplex(n_components_=threshold_pca)
 
@@ -947,7 +983,7 @@ class SimpleDictSearch(Optimizer):
             transformed_array_water_unique = None
             transformed_array_fat_unique = None
 
-        if not(type(dicofull_file)==str) or ("vars_light" not in dicofull.keys()):
+        if not(volumes_type=="raw") or ("vars_light" not in dicofull.keys()):
             var_w = np.sum(array_water_unique * array_water_unique.conj(), axis=1).real
             var_f = np.sum(array_fat_unique * array_fat_unique.conj(), axis=1).real
             sig_wf = np.sum(array_water_unique[index_water_unique] * array_fat_unique[index_fat_unique].conj(),
@@ -1029,6 +1065,8 @@ class SimpleDictSearch(Optimizer):
 
         niter=0
 
+        volumes_type=self.paramDict["volumes_type"]
+
         if "clustering" not in self.paramDict:
             self.paramDict["clustering"]=True
 
@@ -1091,9 +1129,11 @@ class SimpleDictSearch(Optimizer):
 
         del volumes
 
-        if type(dicofull_file) == str:
-            with open(dicofull_file, "rb") as file:
+        with open(dicofull_file, "rb") as file:
                 dicofull = pickle.load(file)
+
+        if volumes_type == "raw":
+            
             mrfdict = dicofull["mrfdict"]
             # mrfdict.load(dictfile, force=True)
 
@@ -1103,24 +1143,31 @@ class SimpleDictSearch(Optimizer):
             keys=np.array(keys)
 
             del mrfdict
-        else:  # otherwise dictfile contains {"full":(s_w,s_f,keys),"light":(s_w_light,s_f_light,keys_light)}
-            array_water = dicofull_file["full"][0]
-            array_fat = dicofull_file["full"][1]
-            keys = dicofull_file["full"][2]
+        elif volumes_type=="singular":  # otherwise dictfile contains {"mrfdict":(s_w,s_f,keys),"mrfdict_light":(s_w_light,s_f_light,keys_light)}
+            array_water = dicofull["mrfdict_L0{}".format(threshold_pca)][0]
+            array_fat = dicofull["mrfdict_L0{}".format(threshold_pca)][1]
+            keys = dicofull["mrfdict_L0{}".format(threshold_pca)][2]
             keys=np.array(keys)
 
         if retained_timesteps is not None:
             array_water = array_water[:, retained_timesteps]
             array_fat = array_fat[:, retained_timesteps]
+        
+        ntimesteps_dico=array_water.shape[-1]
 
-        if not(type(dicofull_file)==str)or("vars" not in dicofull.keys()) or ((pca) and ("pca_{}".format(threshold_pca) not in dicofull.keys())) or (calculate_matched_signals):
+        if not(ntimesteps_dico==ntimesteps):
+            raise ValueError("The dictionary and the incoming signal did not have the same number of timesteps: ntimesteps_dico {} != ntimesteps_signal {}".format(ntimesteps_dico,ntimesteps))
+
+
+
+        if not(volumes_type=="raw")or("vars" not in dicofull.keys()) or ((pca) and ("pca_{}".format(threshold_pca) not in dicofull.keys())) or (calculate_matched_signals):
 
             # print("Calculating unique dico signals")
             array_water_unique, index_water_unique = np.unique(array_water, axis=0, return_inverse=True)
             array_fat_unique, index_fat_unique = np.unique(array_fat, axis=0, return_inverse=True)
 
 
-        if not(type(dicofull_file)==str) or ("vars" not in dicofull.keys()):
+        if not(volumes_type=="raw") or ("vars" not in dicofull.keys()):
 
             var_w_total = np.sum(array_water_unique * array_water_unique.conj(), axis=1).real
             var_f_total = np.sum(array_fat_unique * array_fat_unique.conj(), axis=1).real
@@ -1132,7 +1179,7 @@ class SimpleDictSearch(Optimizer):
             var_f_total = np.reshape(var_f_total, (-1, 1))
             sig_wf_total = np.reshape(sig_wf_total, (-1, 1))
             
-            if type(dicofull_file)==str:
+            if volumes_type=="raw":
                 dicofull["vars"]=(var_w_total,var_f_total,sig_wf_total,index_water_unique,index_fat_unique)
                 with open(dicofull_file,"wb") as file:
                     pickle.dump(dicofull,file)
@@ -1142,7 +1189,7 @@ class SimpleDictSearch(Optimizer):
             (var_w_total,var_f_total,sig_wf_total,index_water_unique,index_fat_unique)=dicofull["vars"]
 
         if pca:
-            if not(type(dicofull_file)==str) or ("pca_{}".format(threshold_pca) not in dicofull.keys()):
+            if not(volumes_type=="raw") or ("pca_{}".format(threshold_pca) not in dicofull.keys()):
                 pca_water = PCAComplex(n_components_=threshold_pca)
                 pca_fat = PCAComplex(n_components_=threshold_pca)
 
@@ -2028,3 +2075,309 @@ def convertArrayToImageHelper(dico,data,apply_offset=False,reorient=True):
     
     
     return data,geom
+
+
+
+def cutup(data, blck, strd):
+    """
+    Extracts overlapping patches from an ND array using strided views, handling non-multiple strides,
+    and returns the applied padding.
+
+    Parameters:
+        data : ndarray
+            Input ND array.
+        blck : tuple or array-like
+            Block (patch) size for each dimension.
+        strd : tuple or array-like
+            Stride (step size) for each dimension.
+
+    Returns:
+        patches : ndarray
+            Overlapping patches of shape (num_patches_dim1, ..., num_patches_dimN, *blck).
+        pad_widths : list of tuples
+            Padding applied to each dimension.
+    """
+    sh = np.array(data.shape)
+    blck = np.asanyarray(blck)
+    strd = np.asanyarray(strd)
+
+    # Compute the number of blocks in each dimension, rounding up
+    nbl = np.ceil((sh - blck) / strd).astype(int) + 1  # Ensure we cover the full range
+
+    # Compute required padding for each dimension
+    pad_widths = np.maximum((nbl - 1) * strd + blck - sh, 0)
+
+    # Apply padding if needed
+    if np.any(pad_widths > 0):
+        pad_widths = [(0, int(p)) for p in pad_widths]  # Pad only at the end
+        data = np.pad(data, pad_widths, mode='constant')
+    else:
+        pad_widths = [(0, 0) for _ in range(len(sh))]  # No padding needed
+
+    # Compute new strides
+    strides = tuple(data.strides * strd) + tuple(data.strides)
+
+    # Define output shape (patch grid dimensions + block size)
+    new_shape = tuple(nbl) + tuple(blck)
+
+    # Create the strided view
+    patches = stride_tricks.as_strided(data, shape=new_shape, strides=strides)
+    
+    return patches, pad_widths
+
+# def stuff_patches_3D(sh,patches,strd,blck):
+#     out = np.zeros(sh, patches.dtype)
+#     sh = np.asanyarray(sh)
+#     blck = np.asanyarray(blck)
+#     strd = np.asanyarray(strd)
+#     nbl = (sh - blck) // strd + 1
+#     strides = np.r_[out.strides * strd, out.strides]
+#     dims = np.r_[nbl, blck]
+#     data6 = stride_tricks.as_strided(out, strides=strides, shape=dims)
+#     data6[...]=patches.reshape(data6.shape)
+#     return out
+
+def stuff_patches_3D(orig_sh, patches, blck, strd, pad_widths):
+    """
+    Recombines 3D overlapping patches into the original image/volume, handling padding and stride mismatches.
+
+    Parameters:
+        orig_sh : tuple of int
+            Original shape of the volume before padding.
+        patches : ndarray
+            Overlapping patches of shape (num_patches_x, num_patches_y, num_patches_z, *blck).
+        strd    : tuple of int
+            Stride (step size) used to extract patches.
+        blck    : tuple of int
+            Patch size.
+        pad_widths : list of tuples
+            Padding applied to each dimension.
+
+    Returns:
+        out : ndarray
+            Reconstructed volume, properly cropped to original dimensions.
+    """
+    padded_sh = tuple(s + sum(pad) for s, pad in zip(orig_sh, pad_widths))
+    
+    # Initialize padded output volume and weight map
+    out = np.zeros(padded_sh, dtype=patches.dtype)
+    weight = np.zeros(padded_sh, dtype=np.float32)
+
+    strd = np.asanyarray(strd)
+    blck = np.asanyarray(blck)
+
+    # Compute number of patches in each dimension
+    nbl = np.ceil((orig_sh - blck) / strd).astype(int) + 1
+
+    # print(nbl)
+    
+
+    # Iterate over patch positions
+    for i in range(nbl[0]):
+        for j in range(nbl[1]):
+            for k in range(nbl[2]):
+                for l in range(nbl[3]):
+                    # Compute slice indices
+                    slices = (
+                        slice(i * strd[0], min(i * strd[0] + blck[0], padded_sh[0])),
+                        slice(j * strd[1], min(j * strd[1] + blck[1], padded_sh[1])),
+                        slice(k * strd[2], min(k * strd[2] + blck[2], padded_sh[2])),
+                        slice(l* strd[3], min(l * strd[3] + blck[3], padded_sh[3]))
+                    )
+
+                    # print(slices)
+
+                    # Add patch values to the output image
+                    # print(patches[i,j,k,l].shape)
+                    out[slices] += patches[i, j, k,l]
+                    weight[slices] += 1  # Accumulate weight for normalization
+
+    # Normalize overlapping areas
+    weight[weight == 0] = 1  # Avoid division by zero
+    out /= weight
+
+    # Crop to original shape (remove padding)
+    crop_slices = tuple(slice(0, orig_sh[d]) for d in range(4))
+    return out[crop_slices]
+
+def proj_LLR(vol, blck, strd, threshold):
+    x_patches,padding = cutup(vol, blck, strd)
+    patch_shape = x_patches.shape
+    # print(patch_shape)
+    x_patches = x_patches.reshape((np.prod(patch_shape[:len(blck)]), -1))
+
+    a, s, bh = da.linalg.svd(da.asarray(x_patches))
+    bh = np.array(bh)
+    s = np.array(s)
+    a = np.array(a)
+
+    sig = pywt.threshold(s, threshold)
+
+    print("Retained comp % {}".format(np.sum(sig > 0) / sig.shape[0] * 100))
+    x_patches_lr = a @ np.diag(sig) @ bh
+    u = stuff_patches_3D(vol.shape, x_patches_lr.reshape(patch_shape), blck, strd,padding)
+    return u
+
+
+
+def undersampling_operator_singular(volumes, trajectory, b1_all_slices=None, density_adj=True):
+    """
+    Computes A.H @ W @ A @ volumes where A is the Fourier + sampling operator 
+    and W is the radial density adjustment.
+
+    Parameters:
+        volumes (ndarray): Image volumes of shape (nb_temporal_components, nb_slices, img_size_x, img_size_y)
+        trajectory: Trajectory object with radial k-space coordinates
+        b1_all_slices (ndarray): Coil sensitivity maps of shape (nb_slices, nb_channels, img_size_x, img_size_y)
+        density_adj (bool): Whether to apply density compensation (default: True)
+
+    Returns:
+        images_series_rebuilt (ndarray): Reconstructed images of shape (nb_temporal_components, nb_slices, img_size_x, img_size_y)
+    """
+    
+    L0, nb_slices, img_size_x, img_size_y = volumes.shape
+    img_size = (img_size_x, img_size_y)
+    volumes=volumes.astype("complex64")
+    if b1_all_slices is None:
+        b1_all_slices = np.ones((nb_slices, 1, img_size_x, img_size_y), dtype="complex64")
+
+    nb_channels = b1_all_slices.shape[1]
+    traj = trajectory.get_traj_for_reconstruction(1).astype("float32").reshape(-1, 2)
+    npoint = trajectory.paramDict["npoint"]
+    num_k_samples = traj.shape[0]
+
+    if density_adj:
+        density = np.abs(np.linspace(-1, 1, npoint))
+        # density /=np.sum(density)
+
+    # Initialize output image
+    images_series_rebuilt = np.zeros((L0, nb_slices, img_size_x, img_size_y), dtype=np.complex64)
+
+    for k in range(nb_channels):
+        # Apply coil sensitivity maps
+        curr_volumes = volumes * np.expand_dims(b1_all_slices[:, k], axis=0)
+
+        # NUFFT Forward (Image → k-space)
+        curr_kdata = finufft.nufft2d2(asca(traj[:, 0]), asca(traj[:, 1]), asca(curr_volumes.reshape(L0 * nb_slices, img_size_x, img_size_y)))
+        curr_kdata = curr_kdata.reshape(L0, nb_slices, -1).astype("complex64")
+
+        if density_adj:
+            curr_kdata = curr_kdata.reshape(L0, -1, npoint)
+              # Radial density compensation
+            curr_kdata *= np.expand_dims(density, tuple(range(curr_kdata.ndim - 1)))
+            curr_kdata = curr_kdata.reshape(L0, nb_slices, traj.shape[0])
+
+        # NUFFT Adjoint (k-space → Image)
+        recon_images = finufft.nufft2d1(asca(traj[:, 0]), asca(traj[:, 1]), asca(curr_kdata.reshape(L0 * nb_slices, -1)), img_size)
+        recon_images = recon_images.reshape((L0, nb_slices, img_size_x, img_size_y))
+
+        # Apply conjugate coil sensitivities
+        images_series_rebuilt += np.expand_dims(b1_all_slices[:, k].conj(), axis=0) * recon_images
+
+    images_series_rebuilt /= num_k_samples  # Normalize
+    return images_series_rebuilt
+
+
+
+
+
+def fista_reconstruction(volumes, b1, radial_traj, dens_adj, niter, lambd, mu, 
+                         prox_operator, **kwargs_prox):
+    
+    """
+    Performs FISTA reconstruction with a given proximal operator for denoising.
+    
+    Parameters:
+    - volumes: Input volume data.
+    - b1: Sensitivity maps.
+    - radial_traj: Radial trajectory for sampling.
+    - dens_adj: Density compensation.
+    - niter: Number of iterations.
+    - lambd: Regularization parameter.
+    - mu: Step size parameter.
+    - prox_operator: Function handle for the proximal operator (e.g., wavelet or LLR).
+    - **kwargs_prox: Additional arguments for the proximal operator.
+    
+    Returns:
+    - Denoised and reconstructed volume.
+
+    Example Usage:
+    Using wavelet-based denoising
+    result = fista_reconstruction(volumes, b1, radial_traj, dens_adj, niter, lambd, mu, 
+                               prox_wavelet, wav_type='db4', wav_level=3, axes=(0,1))
+
+    Using LLR-based denoising
+    result = fista_reconstruction(volumes, b1, radial_traj, dens_adj, niter, lambd, mu, 
+                               prox_LLR, blck=(8,8,8), strd=(4,4,4))
+    """
+    
+    if niter == 0:
+        return volumes
+    
+    # Initialize variables
+    u = mu * volumes
+    u0 = volumes
+    y = u
+    t = 1
+    
+    # Apply the proximal operator for initial denoising
+    u = prox_operator(y, lambd * mu, **kwargs_prox)
+    t_next = 0.5 * (1 + np.sqrt(1 + 4 * t ** 2))
+    y = u
+    t = t_next
+    
+    for i in tqdm(range(1, niter),desc="FISTA iteration"):
+        u_prev = u
+        
+        # Compute undersampled volume
+        volumesi = undersampling_operator_singular(y, radial_traj, b1, density_adj=dens_adj)
+        
+        # Gradient update
+        grad = volumesi - u0 / mu
+        y = y - mu * grad
+        
+        # Apply proximal operator
+        u = prox_operator(y, lambd * mu, **kwargs_prox)
+        
+        # Update momentum
+        t_next = 0.5 * (1 + np.sqrt(1 + 4 * t ** 2))
+        y = u + (t - 1) / t_next * (u - u_prev)
+        t = t_next
+        
+    return np.array(u).squeeze()
+
+def prox_wavelet(volumes, threshold, wav_type="db4", wav_level=None, axes=(1,2,3)):
+    """
+    Applies wavelet-based thresholding as a proximal operator.
+    
+    Parameters:
+    - volumes: Input volume data.
+    - threshold: Threshold for wavelet shrinkage.
+    - wav_type: Type of wavelet transform.
+    - wav_level: Number of decomposition levels.
+    - axes: Axes along which the wavelet transform is applied.
+    
+    Returns:
+    - Denoised volume after wavelet reconstruction.
+    """
+
+    coefs = pywt.wavedecn(volumes, wav_type, level=wav_level, mode="periodization", axes=axes)
+    u, slices = pywt.coeffs_to_array(coefs, axes=axes)
+    u = pywt.threshold(u, threshold)
+    return pywt.waverecn(pywt.array_to_coeffs(u, slices, coefs), wav_type, mode="periodization", axes=axes)
+
+def prox_LLR(volumes, threshold, blck, strd):
+    """
+    Applies locally low-rank (LLR) denoising as a proximal operator.
+    
+    Parameters:
+    - volumes: Input volume data.
+    - threshold: Threshold for low-rank approximation.
+    - blck: Block size for LLR.
+    - strd: Stride size for LLR.
+    
+    Returns:
+    - Denoised volume after LLR processing.
+    """
+
+    return proj_LLR(volumes, blck, strd, threshold)

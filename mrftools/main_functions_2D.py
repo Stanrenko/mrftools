@@ -120,8 +120,91 @@ def calculate_sensitivity_map(kdata,res=16,hanning_filter=True,density_adj=False
             #b1[i]=b1[i] / np.max(np.abs(b1[i].flatten()))
     return b1
 
+def build_volumes_singular(kdata, b1_all_slices, phi, L0=6):
+    """
+    Builds a time series of undersampled volumes for all slices using temporal basis functions.
+
+    Parameters:
+        kdata (ndarray): K-space data of shape (nb_slices, nb_channels, nb_segments, npoint)
+        b1_all_slices (ndarray): Coil sensitivity maps of shape (nb_slices, nb_channels, npoint/2, npoint/2)
+        phi (ndarray): Temporal basis matrix of shape (ntimesteps, temporal components)
+        L0 (int): Number of temporal basis components to use (default: 6)
+
+    Returns:
+        volumes_singular_all_slices (ndarray): Reconstructed volumes of shape (L0, nb_slices, npoint/2, npoint/2)
+    """
+
+    print("Building Singular Volumes using {} temporal components".format(L0))
+
+    # Get dimensions
+    nb_slices, nb_channels, nb_allspokes, npoint = kdata.shape
+    image_size = (npoint // 2, npoint // 2)
+    ntimesteps = phi.shape[1]
+
+    # Compute number of radial trajectory points per timestep
+    window = nb_allspokes // ntimesteps
+
+    # Output shape: (L0, nb_slices, npoint/2, npoint/2)
+    volumes_singular_all_slices = np.zeros((L0, nb_slices) + image_size, dtype=np.complex64)
+
+    # Generate radial trajectory
+    radial_traj = Radial(total_nspokes=nb_allspokes, npoint=npoint)
+    traj_reco = radial_traj.get_traj_for_reconstruction(1).astype("float32").reshape(-1, 2)
+
+    # Loop over slices
+    for sl in tqdm(range(nb_slices), desc="Processing Slices"):
+        kdata_all_channels = kdata[sl].reshape(nb_channels, ntimesteps, -1)  # Reshape k-space data
+        b1 = b1_all_slices[sl]  # Get coil sensitivity map for slice
+
+        # Loop over channels
+        for j in tqdm(range(nb_channels), desc="Processing Coils", leave=False):
+            kdata_singular = np.zeros((L0, ntimesteps, window * npoint), dtype=np.complex64)
+
+            # Compute singular k-space data using temporal basis
+            for ts in range(ntimesteps):
+
+                # kdata_singular[ts, :, :] = np.matmul(kdata_all_channels[j, ts, :, None],(np.asarray(phi[:L0]).conj().T[ts][None, :]))
+                kdata_singular[:, ts, :] = np.matmul(
+                    kdata_all_channels[j, ts, :, None],
+                    phi[:L0].conj().T[ts][None, :]
+                ).T
+
+            # Reshape for NUFFT input
+            kdata_singular = kdata_singular.reshape(L0, -1)
+
+            # Perform NUFFT reconstruction
+            fk = finufft.nufft2d1(asca(traj_reco[:, 0]), asca(traj_reco[:, 1]), asca(kdata_singular.squeeze()), image_size)
+
+            # Apply coil sensitivity and accumulate across channels
+            volumes_singular_all_slices[:, sl] += np.expand_dims(b1[j].conj(), axis=0) * fk
+
+    return volumes_singular_all_slices
 
 
+def build_volumes_singular_iterative(kdata, b1_all_slices, phi, L0=6,niter=0,regularizer="wavelet",dens_adj=True,lambd=1e-4,mu=1,**kwargs_prox):
+    if regularizer=="wavelet":
+        prox_operator=prox_wavelet
+    elif regularizer=="LLR":
+        prox_operator=prox_LLR
+    elif (regularizer==None):
+        if niter > 0:
+            raise ValueError("You should choose a regularization method when niter > 0")
+        else:
+            pass
+    else:
+        raise ValueError("Regularization method should be : wavelet, LLR")
+
+    volumes_singular_all_slices=build_volumes_singular(kdata, b1_all_slices, phi, L0)
+
+    if niter>0:
+        print("Denoising Volumes with {} regularization using {} FISTA iterations".format(regularizer,niter))
+        nb_slices,npoint,nb_allspokes,npoint=kdata.shape
+        radial_traj=Radial(total_nspokes=nb_allspokes,npoint=npoint)
+        volumes_singular_all_slices=fista_reconstruction(volumes_singular_all_slices, b1_all_slices, radial_traj, dens_adj, niter, lambd, mu, 
+                            prox_operator, **kwargs_prox)
+         
+    
+    return volumes_singular_all_slices
 
 
 
@@ -184,6 +267,23 @@ def build_masks(kdata,b1_all_slices,threshold_factor=1/25):
 
     return(masks_all_slices)
 
+def build_mask_from_singular_volume(volumes,l=0,threshold=0.015,it=2):
+    '''
+        Builds mask from singular volumes
+        inputs:
+            volumes: singular volumes (nb singular volumes x nb slices x npoint x npoint)
+            l: singular volume used for mask calculation 
+            threshold: histogram threshold to define retained pixels for the mask
+            it: binary closing iterations
+
+        outputs:
+            mask: mask (nb slices x npoint x npoint)
+    '''
+
+    volume=volumes[l]
+    mask=build_mask_from_volume(volume,threshold,it)
+    
+    return(mask)
 
 
 def check_dico(dico_hdr, seqParams):
@@ -213,7 +313,10 @@ def check_dico(dico_hdr, seqParams):
 
 
 
-def build_maps(volumes_all_slices,masks_all_slices,dico_full_file,useGPU=True,split=100,return_cost=False,pca=6):
+
+
+
+def build_maps(volumes_all_slices,masks_all_slices,dico_full_file,useGPU=True,split=100,return_cost=False,pca=6,volumes_type="raw"):
     '''
     builds MRF maps using bi-component dictionary matching (Slioussarenko et al. MRM 2024)
     inputs:
@@ -225,6 +328,9 @@ def build_maps(volumes_all_slices,masks_all_slices,dico_full_file,useGPU=True,sp
     split - signal batch count for memory management (int)
     return_cost - whether to return additional maps (e.g. proton density, phase and cost)
     pca - number of temporal pca components retained (int)
+    phi - temporal basis (numpy array)
+    volumes_type - "raw" or "singular" - depending on the input volumes ("raw" time serie of undersampled volumes / "singular" singular volumes)
+    
 
     outputs:
     all_maps: tuple containing for all iterations 
@@ -242,11 +348,13 @@ def build_maps(volumes_all_slices,masks_all_slices,dico_full_file,useGPU=True,sp
     except:
         print("Could not import cupy - not using gpu")
         useGPU=False
-
+    
     optimizer = SimpleDictSearch(mask=masks_all_slices, split=split, pca=True,
-                                             threshold_pca=pca,threshold_ff=0.9,return_cost=return_cost,useGPU_dictsearch=useGPU)
-            
+                                                threshold_pca=pca,threshold_ff=0.9,return_cost=return_cost,useGPU_dictsearch=useGPU,volumes_type=volumes_type)
+                
     all_maps=optimizer.search_patterns_test_multi_2_steps_dico(dico_full_file,volumes_all_slices)
+        
+
     
     return all_maps
 
@@ -299,7 +407,7 @@ def save_maps(all_maps, file_seqParams, keys = ["ff","wT1","attB1","df"]):
 
 
 
-def generate_dictionaries(sequence_file,reco,min_TR_delay,dictconf,dictconf_light,TI=8.32, dest=None,diconame="dico"):
+def generate_dictionaries(sequence_file,reco,min_TR_delay,dictconf,dictconf_light,TI=8.32, dest=None,diconame="dico",is_build_phi=False,L0=6):
     '''
     Generates dictionaries from sequence and dico configuration files
     inputs:
@@ -309,7 +417,9 @@ def generate_dictionaries(sequence_file,reco,min_TR_delay,dictconf,dictconf_ligh
     dictconf - dictionary parameter grid for full dictionary (dictionary)
     dictconf_light - dictionary parameter grid for light dictionary (dictionary)
     TI - inversion time (ms)
-
+    build_phi - whether to build temporal basis phi (bool)
+    L0 - number of temporal components (int)
+    
     outputs:
     saves the dictionaries paths and headers in a .pkl file
     '''
@@ -328,8 +438,49 @@ def generate_dictionaries(sequence_file,reco,min_TR_delay,dictconf,dictconf_ligh
                         "mrfdict":mrfdict,
                         "mrfdict_light":mrfdict_light}
     
+    if is_build_phi:
+        dico_full_with_hdr=add_temporal_basis(dico_full_with_hdr,L0)
+            
+
+
     dico_full_name = str.split(dictfile,".dict")[0]+".pkl"
     with open(dico_full_name,"wb") as file:
         pickle.dump(dico_full_with_hdr,file)
 
     return
+
+
+def add_temporal_basis(dico,L0=None):
+    if "phi" not in dico.keys():
+        print("Building temporal basis from dictionary")
+        mrfdict=dico["mrfdict"]
+        phi=build_phi(mrfdict)
+        dico["phi"]=phi
+
+    if (L0 is not None)and(("mrfdict_light_L0{}".format(L0) not in dico.keys())or("mrfdict_L0{}".format(L0) not in dico.keys())):
+        phi=dico["phi"]
+        print("Projecting dictionaries on subspace formed by first {} temporal components".format(L0))
+        dico=compress_dictionary(dico,phi,L0)
+    return dico
+    
+
+
+def compress_dictionary(dico,phi,L0):
+    phi=phi[:L0]
+    mrfdict=dico["mrfdict"]
+    keys = mrfdict.keys
+    array_water = mrfdict.values[:, :, 0]
+    array_fat = mrfdict.values[:, :, 1]
+    array_water_projected=array_water@phi.T.conj()
+    array_fat_projected=array_fat@phi.T.conj()
+
+    mrfdict_light=dico["mrfdict_light"]
+    keys_light = mrfdict_light.keys
+    array_water = mrfdict_light.values[:, :, 0]
+    array_fat = mrfdict_light.values[:, :, 1]
+    array_water_light_projected=array_water@phi.T.conj()
+    array_fat_light_projected=array_fat@phi.T.conj()
+
+    dico["mrfdict_light_L0{}".format(L0)]=(array_water_light_projected,array_fat_light_projected,keys_light)
+    dico["mrfdict_L0{}".format(L0)]=(array_water_projected,array_fat_projected,keys)
+    return dico
