@@ -187,7 +187,7 @@ if __name__ == '__main__':
                 kwargs_prox={
                     "wav_type":'db4',
                     "wav_level":None,
-                    "axes":(1,2,3)
+                    "axes":(2,3)
                 }
             elif regularizer=="LLR":
                 if lambd is None:

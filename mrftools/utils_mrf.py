@@ -2365,7 +2365,8 @@ def prox_wavelet(volumes, threshold, wav_type="db4", wav_level=None, axes=(1,2,3
     coefs = pywt.wavedecn(volumes, wav_type, level=wav_level, mode="periodization", axes=axes)
     u, slices = pywt.coeffs_to_array(coefs, axes=axes)
     u = pywt.threshold(u, threshold)
-    return pywt.waverecn(pywt.array_to_coeffs(u, slices, coefs), wav_type, mode="periodization", axes=axes)
+
+    return pywt.waverecn(pywt.array_to_coeffs(u, slices), wav_type, mode="periodization", axes=axes)
 
 def prox_LLR(volumes, threshold, blck, strd):
     """
