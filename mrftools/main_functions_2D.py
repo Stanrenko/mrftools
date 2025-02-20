@@ -267,7 +267,7 @@ def build_masks(kdata,b1_all_slices,threshold_factor=1/25):
 
     return(masks_all_slices)
 
-def build_mask_from_singular_volume(volumes,l=0,threshold=0.015,it=2):
+def build_mask_from_singular_volume(volumes,l=0,threshold=0.03,it=2):
     '''
         Builds mask from singular volumes
         inputs:
@@ -449,38 +449,3 @@ def generate_dictionaries(sequence_file,reco,min_TR_delay,dictconf,dictconf_ligh
 
     return
 
-
-def add_temporal_basis(dico,L0=None):
-    if "phi" not in dico.keys():
-        print("Building temporal basis from dictionary")
-        mrfdict=dico["mrfdict"]
-        phi=build_phi(mrfdict)
-        dico["phi"]=phi
-
-    if (L0 is not None)and(("mrfdict_light_L0{}".format(L0) not in dico.keys())or("mrfdict_L0{}".format(L0) not in dico.keys())):
-        phi=dico["phi"]
-        print("Projecting dictionaries on subspace formed by first {} temporal components".format(L0))
-        dico=compress_dictionary(dico,phi,L0)
-    return dico
-    
-
-
-def compress_dictionary(dico,phi,L0):
-    phi=phi[:L0]
-    mrfdict=dico["mrfdict"]
-    keys = mrfdict.keys
-    array_water = mrfdict.values[:, :, 0]
-    array_fat = mrfdict.values[:, :, 1]
-    array_water_projected=array_water@phi.T.conj()
-    array_fat_projected=array_fat@phi.T.conj()
-
-    mrfdict_light=dico["mrfdict_light"]
-    keys_light = mrfdict_light.keys
-    array_water = mrfdict_light.values[:, :, 0]
-    array_fat = mrfdict_light.values[:, :, 1]
-    array_water_light_projected=array_water@phi.T.conj()
-    array_fat_light_projected=array_fat@phi.T.conj()
-
-    dico["mrfdict_light_L0{}".format(L0)]=(array_water_light_projected,array_fat_light_projected,keys_light)
-    dico["mrfdict_L0{}".format(L0)]=(array_water_projected,array_fat_projected,keys)
-    return dico

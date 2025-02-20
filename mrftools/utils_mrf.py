@@ -148,7 +148,7 @@ def build_phi(mrfdict,FFs=np.arange(0.1,1.09,0.1)):
 
 
 
-def match_signals_v2(all_signals,keys,pca_water,pca_fat,array_water_unique,array_fat_unique,transformed_array_water_unique,transformed_array_fat_unique,var_w,var_f,sig_wf,pca,index_water_unique,index_fat_unique,remove_duplicates,verbose,niter,split,useGPU_dictsearch,mask,return_matched_signals=False):
+def match_signals_v2(all_signals,keys,pca_water,pca_fat,array_water_unique,array_fat_unique,transformed_array_water_unique,transformed_array_fat_unique,var_w,var_f,sig_wf,pca,index_water_unique,index_fat_unique,remove_duplicates,verbose,split,useGPU_dictsearch,mask,return_matched_signals=False):
 
     nb_signals = all_signals.shape[1]
 
@@ -178,7 +178,7 @@ def match_signals_v2(all_signals,keys,pca_water,pca_fat,array_water_unique,array
         alpha_optim = cp.zeros(nb_signals)
 
 
-    if niter > 0 or return_matched_signals:
+    if return_matched_signals:
         phase_optim = []
         J_optim = []
 
@@ -523,7 +523,7 @@ def match_signals_v2(all_signals,keys,pca_water,pca_fat,array_water_unique,array
         idx_max_all_unique=idx_max_all_unique.get()
         alpha_optim=alpha_optim.get()
 
-    if (niter > 0) or return_matched_signals:
+    if return_matched_signals:
         phase_optim = np.array(phase_optim)
         J_optim = np.array(J_optim)
 
@@ -859,10 +859,9 @@ class Optimizer(object):
 
 class SimpleDictSearch(Optimizer):
 
-    def __init__(self,niter=0,seq=None,split=500,pca=True,threshold_pca=15,useGPU_dictsearch=False,remove_duplicate_signals=False,threshold=None,return_matched_signals=False,volumes_type="raw",**kwargs):
+    def __init__(self,seq=None,split=500,pca=True,threshold_pca=15,useGPU_dictsearch=False,remove_duplicate_signals=False,threshold=None,return_matched_signals=False,volumes_type="raw",**kwargs):
         
         super().__init__(**kwargs)
-        self.paramDict["niter"]=niter
         self.paramDict["split"] = split
         self.paramDict["pca"] = pca
         self.paramDict["threshold_pca"] = int(threshold_pca)
@@ -890,7 +889,6 @@ class SimpleDictSearch(Optimizer):
         
 
         verbose = self.verbose
-        niter = 0
         split = self.paramDict["split"]
         pca = self.paramDict["pca"]
         threshold_pca = self.paramDict["threshold_pca"]
@@ -920,7 +918,7 @@ class SimpleDictSearch(Optimizer):
         del volumes
 
         with open(dicofull_file, "rb") as file:
-                dicofull = pickle.load(file)
+            dicofull = pickle.load(file)
 
         if volumes_type == "raw":
             mrfdict = dicofull["mrfdict_light"]
@@ -1010,17 +1008,26 @@ class SimpleDictSearch(Optimizer):
             sig_wf = cp.asarray(sig_wf)
 
         values_results = []
-        keys_results = list(range(niter + 1))
+        keys_results = list(range(1))
+
+        print(all_signals.shape)
+        print(array_water_unique.shape)
+        print(array_fat_unique.shape)
+        print(transformed_array_water_unique.shape)
+        print(transformed_array_fat_unique.shape)
+        print(var_w.shape)
+        print(var_f.shape)
+        print(sig_wf.shape)
+        
 
         print("Calculating optimal fat fraction and best pattern per signal")
-        if not (self.paramDict["return_matched_signals"]) and (niter == 0):
+        if not (self.paramDict["return_matched_signals"]):
             map_rebuilt, J_optim, phase_optim = match_signals_v2(all_signals, keys, pca_water, pca_fat,
                                                                  array_water_unique, array_fat_unique,
                                                                  transformed_array_water_unique,
                                                                  transformed_array_fat_unique, var_w, var_f,
                                                                  sig_wf, pca, index_water_unique,
-                                                                 index_fat_unique, remove_duplicates, verbose,
-                                                                 niter, split, useGPU_dictsearch, mask
+                                                                 index_fat_unique, remove_duplicates, verbose,split, useGPU_dictsearch, mask
                                                                  )
         else:
             map_rebuilt, J_optim, phase_optim, matched_signals = match_signals_v2(all_signals, keys, pca_water,
@@ -1032,8 +1039,7 @@ class SimpleDictSearch(Optimizer):
                                                                                   var_w, var_f, sig_wf,
                                                                                   pca, index_water_unique,
                                                                                   index_fat_unique,
-                                                                                  remove_duplicates, verbose,
-                                                                                  niter, split,
+                                                                                  remove_duplicates, verbose, split,
                                                                                   useGPU_dictsearch, mask,                                                                            
                                                                                   return_matched_signals=True)
 
@@ -1062,8 +1068,6 @@ class SimpleDictSearch(Optimizer):
             mask = build_mask_from_volume(volumes)
         else:
             mask = self.mask
-
-        niter=0
 
         volumes_type=self.paramDict["volumes_type"]
 
@@ -1221,7 +1225,7 @@ class SimpleDictSearch(Optimizer):
             keys=cp.asarray(keys)
 
         values_results = []
-        keys_results = list(range(niter + 1))
+        keys_results = list(range(1))
 
         print("Calculating optimal fat fraction and best pattern per signal")
 
@@ -2201,6 +2205,12 @@ def stuff_patches_3D(orig_sh, patches, blck, strd, pad_widths):
     return out[crop_slices]
 
 def proj_LLR(vol, blck, strd, threshold):
+    if strd is None:
+        strd=blck
+
+    blck=np.array(list(vol.shape[:(vol.ndim - len(blck))])+list(blck))
+    strd=np.array(list(vol.shape[:(vol.ndim - len(blck))])+list(strd))
+
     x_patches,padding = cutup(vol, blck, strd)
     patch_shape = x_patches.shape
     # print(patch_shape)
@@ -2381,3 +2391,40 @@ def prox_LLR(volumes, threshold, blck, strd):
     """
 
     return proj_LLR(volumes, blck, strd, threshold)
+
+
+
+def add_temporal_basis(dico,L0=None):
+    if "phi" not in dico.keys():
+        print("Building temporal basis from dictionary")
+        mrfdict=dico["mrfdict"]
+        phi=build_phi(mrfdict)
+        dico["phi"]=phi
+
+    if (L0 is not None)and(("mrfdict_light_L0{}".format(L0) not in dico.keys())or("mrfdict_L0{}".format(L0) not in dico.keys())):
+        phi=dico["phi"]
+        print("Projecting dictionaries on subspace formed by first {} temporal components".format(L0))
+        dico=compress_dictionary(dico,phi,L0)
+    return dico
+    
+
+
+def compress_dictionary(dico,phi,L0):
+    phi=phi[:L0]
+    mrfdict=dico["mrfdict"]
+    keys = mrfdict.keys
+    array_water = mrfdict.values[:, :, 0]
+    array_fat = mrfdict.values[:, :, 1]
+    array_water_projected=array_water@phi.T.conj()
+    array_fat_projected=array_fat@phi.T.conj()
+
+    mrfdict_light=dico["mrfdict_light"]
+    keys_light = mrfdict_light.keys
+    array_water = mrfdict_light.values[:, :, 0]
+    array_fat = mrfdict_light.values[:, :, 1]
+    array_water_light_projected=array_water@phi.T.conj()
+    array_fat_light_projected=array_fat@phi.T.conj()
+
+    dico["mrfdict_light_L0{}".format(L0)]=(array_water_light_projected,array_fat_light_projected,keys_light)
+    dico["mrfdict_L0{}".format(L0)]=(array_water_projected,array_fat_projected,keys)
+    return dico

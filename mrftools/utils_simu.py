@@ -214,3 +214,4 @@ def load_sequence_file(fileseq,recovery,min_TR_delay):
 #         pickle.dumps(dico_full_with_hdr)
 
 #     return
+
