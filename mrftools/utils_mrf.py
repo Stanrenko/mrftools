@@ -352,6 +352,7 @@ def match_signals_v2(all_signals,keys,pca_water,pca_fat,array_water_unique,array
 
 
         else:
+            print("I am here")
             if verbose:
                 print("Calculating alpha optim and flooring")
                 start = datetime.now()
@@ -943,8 +944,8 @@ class SimpleDictSearch(Optimizer):
             raise ValueError("The dictionary and the incoming signal did not have the same number of timesteps: ntimesteps_dico {} != ntimesteps_signal {}".format(ntimesteps_dico,ntimesteps))
 
 
-        array_water_unique, index_water_unique = np.unique(array_water, axis=0, return_inverse=True)
-        array_fat_unique, index_fat_unique = np.unique(array_fat, axis=0, return_inverse=True)
+        # array_water_unique, index_water_unique = np.unique(array_water, axis=0, return_inverse=True)
+        # array_fat_unique, index_fat_unique = np.unique(array_fat, axis=0, return_inverse=True)
 
         if not(volumes_type=="raw")or("vars_light" not in dicofull.keys()) or ((pca) and ("pca_light_{}".format(threshold_pca) not in dicofull.keys())):
 
@@ -966,7 +967,7 @@ class SimpleDictSearch(Optimizer):
 
                 transformed_array_water_unique = pca_water.transform(array_water_unique)
                 transformed_array_fat_unique = pca_fat.transform(array_fat_unique)
-                if type(dicofull_file) == str:
+                if volumes_type=="raw":
                     dicofull["pca_light_{}".format(threshold_pca)] = (pca_water, pca_fat, transformed_array_water_unique, transformed_array_fat_unique)
                     with open(dicofull_file, "wb") as file:
                         pickle.dump(dicofull, file)
@@ -993,7 +994,7 @@ class SimpleDictSearch(Optimizer):
             var_w = np.reshape(var_w, (-1, 1))
             var_f = np.reshape(var_f, (-1, 1))
             sig_wf = np.reshape(sig_wf, (-1, 1))
-            if type(dicofull_file) == str:
+            if volumes_type == "raw":
                 dicofull["vars_light"] = (var_w, var_f, sig_wf, index_water_unique, index_fat_unique)
                 with open(dicofull_file, "wb") as file:
                     pickle.dump(dicofull, file)
@@ -1202,7 +1203,7 @@ class SimpleDictSearch(Optimizer):
 
                 transformed_array_water_unique = pca_water.transform(array_water_unique)
                 transformed_array_fat_unique = pca_fat.transform(array_fat_unique)
-                if type(dicofull_file) == str:
+                if volumes_type=="raw":
                     dicofull["pca_{}".format(threshold_pca)]=(pca_water,pca_fat,transformed_array_water_unique,transformed_array_fat_unique)    
                     with open(dicofull_file,"wb") as file:
                         pickle.dump(dicofull,file)
