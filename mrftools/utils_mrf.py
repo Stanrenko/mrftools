@@ -2043,11 +2043,11 @@ def convertArrayToImageHelper(dico,data,apply_offset=False,reorient=True):
     
 
     geom={"origin":origin,"spacing":spacing}
-    print(geom)
+    # print(geom)
 
     if data.ndim==2:
         data=data[None,...]
-    print(data.shape)
+    # print(data.shape)
     
     # curr_map=np.flip(np.moveaxis(curr_map,0,2),axis=(0,1,2))
 

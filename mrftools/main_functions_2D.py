@@ -111,7 +111,6 @@ def calculate_sensitivity_map(kdata,res=16,hanning_filter=True,density_adj=False
         b1 = coil_sensitivity / np.linalg.norm(coil_sensitivity, axis=0)
         #b1 = b1 / np.max(np.abs(b1.flatten()))
     else:#first dimension contains slices
-        print("Ndim > 3")
         b1=coil_sensitivity.copy()
         for i in range(coil_sensitivity.shape[0]):
             b1[i]=coil_sensitivity[i] / np.linalg.norm(coil_sensitivity[i], axis=0)
