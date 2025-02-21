@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 from PIL import Image
 import pywt
 import dask.array as da
-from skimage.util import view_as_windows
+from numpy.lib import stride_tricks
 
 try:
     import cupy as cp
@@ -2200,7 +2200,8 @@ def proj_LLR(vol, blck, strd, threshold):
         strd=blck
 
     blck=np.array(list(vol.shape[:(vol.ndim - len(blck))])+list(blck))
-    strd=np.array(list(vol.shape[:(vol.ndim - len(blck))])+list(strd))
+    strd=np.array(list(vol.shape[:(vol.ndim - len(strd))])+list(strd))
+
 
     x_patches,padding = cutup(vol, blck, strd)
     patch_shape = x_patches.shape

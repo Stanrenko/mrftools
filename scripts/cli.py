@@ -194,8 +194,8 @@ if __name__ == '__main__':
                     lambd=0.1
                 mu=1
                 kwargs_prox={
-                    "blck":[6,2,8,8],
-                    "strd":[1,1,2,2]
+                    "blck":[1,8,8],
+                    "strd":[1,2,2]
                 }
 
             volumes_singular=build_volumes_singular_iterative(kdata,b1,phi,L0,niter,regularizer,lambd=lambd,mu=mu,**kwargs_prox)

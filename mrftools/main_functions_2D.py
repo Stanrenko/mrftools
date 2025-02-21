@@ -96,8 +96,7 @@ def calculate_sensitivity_map(kdata,res=16,hanning_filter=True,density_adj=False
 
     
     coil_sensitivity=np.zeros((nb_slices,nb_channels,)+image_size,dtype=kdata.dtype)
-    print(kdata_for_sensi.shape)
-
+    
     for sl in tqdm(range(nb_slices)):
         coil_sensitivity[sl]=finufft.nufft2d1(
             np.ascontiguousarray(traj_all[:, 0]), 
@@ -106,7 +105,6 @@ def calculate_sensitivity_map(kdata,res=16,hanning_filter=True,density_adj=False
             image_size)
     
     #coil_sensitivity=coil_sensitivity.reshape(*kdata.shape[:-2],*image_size)
-    print(coil_sensitivity.shape)
 
     if coil_sensitivity.ndim==3:
         print("Ndim 3)")
