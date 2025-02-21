@@ -111,7 +111,7 @@ def generate_epg_dico_T1MRFSS_from_sequence(sequence_config,filedictconf,recover
 
     if dest is not None:
         dictfile = str(pathlib.Path(dest) / pathlib.Path(dictfile).name)
-    print("Generating dictionary {}".format(dictfile))
+    # print("Generating dictionary {}".format(dictfile))
 
     # water
     print("Generate water signals.")
@@ -155,7 +155,7 @@ def generate_epg_dico_T1MRFSS_from_sequence(sequence_config,filedictconf,recover
     values = np.stack(np.broadcast_arrays(water, fat), axis=-1)
     values = np.moveaxis(values.reshape(len(values), -1, 2), 0, 1)
 
-    print("Save dictionary.")
+    # print("Save dictionary.")
     mrfdict = Dictionary(keys, values)
     # mrfdict.save(dictfile, overwrite=overwrite)
     hdr={"sequence_config":sequence_config,"dict_config":dict_config,"recovery":recovery,"initial_repetitions":rep,"window":window,"sim_mode":sim_mode}

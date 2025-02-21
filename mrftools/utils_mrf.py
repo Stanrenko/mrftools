@@ -1397,7 +1397,7 @@ def build_dico_seqParams(filename,index=-1):
     else:
         nb_segments=alFree[4]
 
-    print(nb_segments)
+    # print(nb_segments)
     if is3D:
         print("3D data")
         x_FOV = hdr[index]['sSliceArray.asSlice[0].dReadoutFOV']
@@ -1419,7 +1419,7 @@ def build_dico_seqParams(filename,index=-1):
         dico_seqParams.update(geometry)
         
     else:
-        print("2D data")
+        # print("2D data")
 
         
         
@@ -1475,7 +1475,7 @@ def get_volume_geometry(hdr_input, index=-1,is_spherical=False):
         print("Getting geometry info for {}".format(hdr_input))
         headers = io_twixt.parse_twixt_header(hdr_input)
     else:
-        print("Input is not a file - assuming the header was passed directly")
+        # print("Input is not a file - assuming the header was passed directly")
         headers = hdr_input
 
     header=headers[index]
@@ -1495,7 +1495,6 @@ def get_volume_geometry(hdr_input, index=-1,is_spherical=False):
         pos_dCor,
         pos_dTra#+offset,
     )
-    print(position)
 
     # volume shape in pixel
     protocol_name=header["tProtocolName"]
@@ -1551,10 +1550,6 @@ def get_volume_geometry(hdr_input, index=-1,is_spherical=False):
     
     spacing=tuple(np.array(spacing)[order_axis])
     shape=tuple(np.array(shape)[order_axis])
-    
-    print("Shape: {}".format(shape))
-
-    print("spacing: {}".format(spacing))
 
 
     if is3D:
@@ -1571,8 +1566,6 @@ def get_volume_geometry(hdr_input, index=-1,is_spherical=False):
             position[2] ,#- spacing[2] / 2,
         )
 
-    print("origin: {}".format(origin))
-
     geom={
         'origin': origin,
         'spacing': spacing,
@@ -1582,7 +1575,6 @@ def get_volume_geometry(hdr_input, index=-1,is_spherical=False):
 
 def has_volume_geometry(header):
     fields = ['sKSpace.lBaseResolution']
-    print(all(field in header for field in fields))
     return all(field in header for field in fields)
 
 def read_rawdata_2D(filename):

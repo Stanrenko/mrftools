@@ -443,6 +443,7 @@ def generate_dictionaries(sequence_file,reco,min_TR_delay,dictconf,dictconf_ligh
     dico_full_name = str.split(dictfile,".dict")[0]+".pkl"
     with open(dico_full_name,"wb") as file:
         pickle.dump(dico_full_with_hdr,file)
+    print("Generated dictionary {}".format(dico_full_name))
 
     return
 
