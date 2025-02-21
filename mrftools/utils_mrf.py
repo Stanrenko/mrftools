@@ -1920,12 +1920,45 @@ def makevol(values, mask):
     return new
 
 
-def build_mask_from_volume(volumes,threshold_factor=0.05,iterations=3):
+def build_mask_from_volume(volumes,threshold_factor=0.05,iterations=2):
     mask = False
-    unique = np.histogram(np.abs(volumes), 100)[1]
+    unique = np.histogram(np.abs(volumes), 1000)[1]
     mask = mask | (np.abs(volumes) > unique[int(len(unique) * threshold_factor)])
-    mask = ndimage.binary_closing(mask, iterations=iterations)
+    if iterations>0:
+        mask = safe_binary_closing(mask,iterations=iterations)
+    
+    # print(mask.shape)
     return mask*1
+
+
+def safe_binary_closing(volume, structure=None, iterations=0):
+    """
+    Applies binary closing to an nD volume while preserving the border slices by using edge padding.
+
+    Parameters:
+    - volume (ndarray): The input binary array (n-dimensional).
+    - structure (ndarray or None): Structuring element. If None, a cross-shaped element is used.
+    - iterations (int): Number of times to apply the closing operation.
+
+    Returns:
+    - ndarray: The binary closed volume with preserved borders.
+    """
+    # Determine the number of dimensions
+    n_dims = volume.ndim
+
+    # Define padding: 1 layer on each side for all axes
+    pad_width = [(1, 1)] * n_dims  # [(1,1), (1,1), ..., (1,1)] for nD
+
+    # Pad the volume using edge values to prevent border artifacts
+    padded_volume = np.pad(volume, pad_width=pad_width, mode='edge')
+    # Apply binary closing
+    closed_padded = ndimage.binary_closing(padded_volume, structure=structure, iterations=iterations)
+
+    # Remove the padding to restore the original shape
+    slices = tuple(slice(1, -1) for _ in range(n_dims))  # (slice(1,-1), slice(1,-1), ...)
+    closed_volume = closed_padded[slices]
+
+    return closed_volume
 
 
 def list_hdr_keys(hdr,filter,index=-1):

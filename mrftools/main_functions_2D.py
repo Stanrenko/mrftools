@@ -264,7 +264,7 @@ def build_masks(kdata,b1_all_slices,threshold_factor=1/25):
 
     return(masks_all_slices)
 
-def build_mask_from_singular_volume(volumes,l=0,threshold=0.03,it=2):
+def build_mask_from_singular_volume(volumes,l=0,threshold=0.03,it=1):
     '''
         Builds mask from singular volumes
         inputs:
