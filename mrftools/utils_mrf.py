@@ -946,10 +946,10 @@ class SimpleDictSearch(Optimizer):
         # array_water_unique, index_water_unique = np.unique(array_water, axis=0, return_inverse=True)
         # array_fat_unique, index_fat_unique = np.unique(array_fat, axis=0, return_inverse=True)
 
-        if not(volumes_type=="raw")or("vars_light" not in dicofull.keys()) or ((pca) and ("pca_light_{}".format(threshold_pca) not in dicofull.keys())):
+        # if not(volumes_type=="raw")or("vars_light" not in dicofull.keys()) or ((pca) and ("pca_light_{}".format(threshold_pca) not in dicofull.keys())):
 
-            array_water_unique, index_water_unique = np.unique(array_water, axis=0, return_inverse=True)
-            array_fat_unique, index_fat_unique = np.unique(array_fat, axis=0, return_inverse=True)
+        array_water_unique, index_water_unique = np.unique(array_water, axis=0, return_inverse=True)
+        array_fat_unique, index_fat_unique = np.unique(array_fat, axis=0, return_inverse=True)
 
 
 
@@ -1155,11 +1155,11 @@ class SimpleDictSearch(Optimizer):
 
 
 
-        if not(volumes_type=="raw")or("vars" not in dicofull.keys()) or ((pca) and ("pca_{}".format(threshold_pca) not in dicofull.keys())) or (calculate_matched_signals):
+        # if not(volumes_type=="raw")or("vars" not in dicofull.keys()) or ((pca) and ("pca_{}".format(threshold_pca) not in dicofull.keys())) or (calculate_matched_signals):
 
             # print("Calculating unique dico signals")
-            array_water_unique, index_water_unique = np.unique(array_water, axis=0, return_inverse=True)
-            array_fat_unique, index_fat_unique = np.unique(array_fat, axis=0, return_inverse=True)
+        array_water_unique, index_water_unique = np.unique(array_water, axis=0, return_inverse=True)
+        array_fat_unique, index_fat_unique = np.unique(array_fat, axis=0, return_inverse=True)
 
 
         if not(volumes_type=="raw") or ("vars" not in dicofull.keys()):
@@ -2085,14 +2085,12 @@ def convertArrayToImageHelper(dico,data,apply_offset=False,reorient=True):
                 #data=np.moveaxis(data,0,2)
         elif orientation=="transversal":
                 # data=np.moveaxis(data,offset,offset+2)
-            data=np.flip(np.moveaxis(data,offset+1,offset+2),axis=(offset+1,offset+2))
+            data=np.flip(np.moveaxis(data,offset+1,offset+2),axis=(offset+1))
             # data=np.flip(np.moveaxis(data,offset+1,offset+2))
         elif orientation=="sagittal":
                 # data=np.moveaxis(data,offset,offset+2)
             print("WARNING: sagittal orientation not tested - should be checked")
             data=np.flip(np.moveaxis(data,(offset,offset+1,offset+2),(offset,offset+2,offset+1)))
-    
-    
     
     return data,geom
 
