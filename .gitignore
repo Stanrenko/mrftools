@@ -7,5 +7,7 @@ __pycache__
 notebooks/
 resources/config/
 resources/dico/
+build/
+dist/
 
 *egg*

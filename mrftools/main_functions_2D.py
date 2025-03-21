@@ -399,7 +399,7 @@ def save_maps(all_maps, file_seqParams, keys = ["ff","wT1","attB1","df"]):
         curr_volume.SetOrigin(geom["origin"])
         
         file_map=os.path.join(path,"{}_map.mha".format(k))
-        sitk.WriteImage(curr_volume,file_map)
+        sitk.WriteImage(curr_volume,file_map,useCompression=True)
 
 
 
