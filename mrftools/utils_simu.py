@@ -4,6 +4,7 @@ import numpy as np
 import itertools
 import epgpy as epg
 import pickle
+from epgpy import common, operators, statematrix, utils
 
 from .utils_mrf import groupby
 from .dictmodel import Dictionary
@@ -43,6 +44,68 @@ class T1MRFSS:
         for r in range(self.nrep):
             curr_seq=self._seq[r*self.len_rep:(r+1)*(self.len_rep)]
             curr_seq=[self.inversion, epg.modify(curr_seq, T1=T1, T2=T2, att=att, g=g)]
+            seq.extend(curr_seq)
+        #seq = [self.inversion, epg.modify(self._seq, T1=T1, T2=T2, att=att, g=g,calc_deriv=calc_deriv)]
+        
+        result=np.asarray(epg.simulate(seq, **kwargs))
+        if rep is not None:
+            result = result.reshape((self.nrep, -1) + result.shape[1:])[rep]
+        return result
+
+def modifier_inv(op, **kwargs):
+    """default modifier to handle 'T1', 'T2', 'g' and 'att' keywords
+    TODO: handle differential operators (options gradients and hessian)
+    """
+    # print(op)
+    # if isinstance(op, operators.T):
+    #     print(op.alpha)
+    
+    if isinstance(op, operators.T) and ((type(op.alpha)==int) or (type(op.alpha)==float)) and (op.alpha == 180):
+        # add B1 attenuation
+        att = kwargs.get("att")
+        if att is None or np.allclose(att, 1):
+            pass  # nothing to do
+        else:
+            # update T operator
+            op = operators.T(op.alpha * att, op.phi, name=op.name, duration=op.duration)
+            op.name += "#"
+     
+    return op
+
+class T1MRFSS_ImperfectInv:
+    def __init__(self, FA, TI, TE, TR, B1,T_recovery,nrep,rep=None):
+        """ build sequence """
+        seqlen = len(TE)
+        self.TR=TR
+        # self.inversion = epg.T(180, 0) # perfect inversion
+        self.T_recovery=T_recovery
+        self.nrep=nrep
+        self.rep=rep
+        seq=[]
+        for r in range(nrep):
+            curr_seq = [epg.Offset(TI)]
+            for i in range(seqlen):
+                echo = [
+                    epg.T(FA * B1[i], 90),
+                    epg.Wait(TE[i]),
+                    epg.ADC,
+                    epg.Wait(TR[i] - TE[i]),
+                    epg.SPOILER,
+                ]
+                curr_seq.extend(echo)
+            recovery=[epg.Wait(T_recovery)]
+            curr_seq.extend(recovery)
+            self.len_rep = len(curr_seq)
+            seq.extend(curr_seq)
+        self._seq = seq
+
+    def __call__(self, T1, T2, g, att,att_inv,**kwargs):
+        """ simulate sequence """
+        seq=[]
+        rep=self.rep
+        for r in range(self.nrep):
+            curr_seq=self._seq[r*self.len_rep:(r+1)*(self.len_rep)]
+            curr_seq=[epg.T(180*att_inv, 0), epg.modify(curr_seq, T1=T1, T2=T2, att=att, g=g)]
             seq.extend(curr_seq)
         #seq = [self.inversion, epg.modify(self._seq, T1=T1, T2=T2, att=att, g=g,calc_deriv=calc_deriv)]
         
@@ -158,7 +221,7 @@ def generate_epg_dico_T1MRFSS_from_sequence(sequence_config,filedictconf,recover
     # print("Save dictionary.")
     mrfdict = Dictionary(keys, values)
     # mrfdict.save(dictfile, overwrite=overwrite)
-    hdr={"sequence_config":sequence_config,"dict_config":dict_config,"recovery":recovery,"initial_repetitions":rep,"window":window,"sim_mode":sim_mode}
+    hdr={"sequence_config":sequence_config,"dict_config":dict_config,"recovery":recovery,"initial_repetitions":rep,"window":window,"sim_mode":sim_mode,"param_names":("wT1","fT1","att","df")}
     return mrfdict,hdr,dictfile
 
 

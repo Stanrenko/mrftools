@@ -313,7 +313,7 @@ def check_dico(dico_hdr, seqParams):
 
 
 
-def build_maps(volumes_all_slices,masks_all_slices,dico_full_file,useGPU=True,split=100,return_cost=False,pca=6,volumes_type="raw"):
+def build_maps(volumes_all_slices,masks_all_slices,dico_full_file,useGPU=True,split=100,return_cost=False,pca=6,volumes_type="raw",clustering_windows=DEFAULT_CLUSTERING_WINDOWS):
     '''
     builds MRF maps using bi-component dictionary matching (Slioussarenko et al. MRM 2024)
     inputs:
@@ -347,7 +347,7 @@ def build_maps(volumes_all_slices,masks_all_slices,dico_full_file,useGPU=True,sp
         useGPU=False
     
     optimizer = SimpleDictSearch(mask=masks_all_slices, split=split, pca=True,
-                                                threshold_pca=pca,threshold_ff=0.9,return_cost=return_cost,useGPU_dictsearch=useGPU,volumes_type=volumes_type)
+                                                threshold_pca=pca,threshold_ff=0.9,return_cost=return_cost,useGPU_dictsearch=useGPU,volumes_type=volumes_type,clustering_windows=clustering_windows)
                 
     all_maps=optimizer.search_patterns_test_multi_2_steps_dico(dico_full_file,volumes_all_slices)
         
