@@ -447,3 +447,45 @@ def generate_dictionaries(sequence_file,reco,min_TR_delay,dictconf,dictconf_ligh
 
     return
 
+def generate_dictionaries_mrf_generic(sequence_config,dictconf,dictconf_light,dest=None,diconame="dico",is_build_phi=False,L0=6):
+    '''
+    Generates dictionaries from sequence and dico configuration files
+    inputs:
+    sequence_file - sequence acquistion parameters (dictionary)
+    reco - waiting time at the end of each MRF repetition (seconds)
+    min_TR_delay - waiting time from echo time to next RF pulse (ms)
+    dictconf - dictionary parameter grid for full dictionary (dictionary)
+    dictconf_light - dictionary parameter grid for light dictionary (dictionary)
+    TI - inversion time (ms)
+    build_phi - whether to build temporal basis phi (bool)
+    L0 - number of temporal components (int)
+    
+    outputs:
+    saves the dictionaries paths and headers in a .pkl file
+    '''
+    # sequence_file = str(sequence_file)
+    # dictconf = str(dictconf)
+    # dictconf_light = str(dictconf_light)
+
+    # _,FA_list,TE_list=load_sequence_file(sequence_file,reco,min_TR_delay/1000)
+    # seq_config=create_new_seq(FA_list,TE_list,min_TR_delay/1000,TI)
+
+    mrfdict,hdr,dictfile=generate_epg_dico_T1MRF_generic_from_sequence(sequence_config,dictconf,dest=dest,prefix_dico="{}".format(diconame))
+    mrfdict_light,hdr_light,dictfile_light=generate_epg_dico_T1MRF_generic_from_sequence(sequence_config,dictconf_light,dest=dest,prefix_dico="{}_light".format(diconame))
+    
+    dico_full_with_hdr={"hdr":hdr,
+                        "hdr_light":hdr_light,
+                        "mrfdict":mrfdict,
+                        "mrfdict_light":mrfdict_light}
+    
+    if is_build_phi:
+        dico_full_with_hdr=add_temporal_basis(dico_full_with_hdr,L0)
+            
+
+
+    dico_full_name = str.split(dictfile,".dict")[0]+".pkl"
+    with open(dico_full_name,"wb") as file:
+        pickle.dump(dico_full_with_hdr,file)
+    print("Generated dictionary {}".format(dico_full_name))
+
+    return
