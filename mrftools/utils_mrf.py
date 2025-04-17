@@ -585,6 +585,7 @@ def match_signals_v2_clustered_on_dico(all_signals_current,keys,pca_water,pca_fa
 
 
     if not (useGPU_dictsearch):
+        labels = np.array(labels)
         for cl in tqdm(range(nb_clusters)):
 
             indices = np.argwhere(labels == cl)
@@ -711,6 +712,7 @@ def match_signals_v2_clustered_on_dico(all_signals_current,keys,pca_water,pca_fa
             alpha_optim_low_ff[indices.flatten()] = (alpha_optim_cluster)
 
     else:
+
         for cl in tqdm(range(nb_clusters)):
 
             indices = cp.argwhere(labels == cl)
@@ -1278,7 +1280,7 @@ class SimpleDictSearch(Optimizer):
 
             all_signals_low_ff = all_signals[:, ind_low_ff.flatten()]
             all_signals_high_ff = all_signals[:, ind_high_ff.flatten()]
-
+            print(type(labels))
 
 
             if return_cost:

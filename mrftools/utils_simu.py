@@ -4,10 +4,11 @@ import numpy as np
 import itertools
 import epgpy as epg
 import pickle
-from epgpy import common, operators, statematrix, utils
+from epgpy.sequence import Sequence, Variable, operators
+from tqdm import tqdm
 
-from .utils_mrf import groupby
-from .dictmodel import Dictionary
+from mrftools.utils_mrf import groupby
+from mrftools.dictmodel import Dictionary
 from mrftools import io
 import matplotlib.pyplot as plt
 import os
@@ -108,6 +109,57 @@ class T1MRFSS:
             result = result.reshape((self.nrep, -1) + result.shape[1:])[rep]
         return result
 
+def t1_mfr_seq(SEQ_CONFIG):
+    att = Variable("att")
+    T1 = Variable("T1")
+    T2 = Variable("T2")
+    g = Variable("g")
+    cs = Variable("cs")
+    frac = Variable("frac")
+
+    seqlen = len(SEQ_CONFIG['TE'])
+    READOUT = SEQ_CONFIG['readout']
+    TI = SEQ_CONFIG['TI']
+    TE = SEQ_CONFIG['TE']
+    FA = SEQ_CONFIG['FA']*SEQ_CONFIG['B1']
+    TR = [i + SEQ_CONFIG['dTR'] for i in TE]
+    T_recovery=SEQ_CONFIG['T_recovery']
+
+
+
+    if SEQ_CONFIG['readout'] == 'FLASH_ideal': 
+        spl = operators.SPOILER
+        PHI = [50 * i * (i + 1) / 2 for i in range(len(TE))]
+    elif SEQ_CONFIG['readout'] == 'FLASH': 
+        spl = operators.S(1)
+        PHI = [50 * i * (i + 1) / 2 for i in range(len(TE))]
+    elif SEQ_CONFIG['readout'] == 'FISP': 
+        spl = operators.S(1)
+        PHI = np.array([0]*len(TE))
+    elif SEQ_CONFIG['readout'] == 'pSSFP': 
+        spl = operators.S(1)
+        PHI = [1 * i * (i + 1) / 2 for i in range(len(TE))]
+    elif SEQ_CONFIG['readout'] == 'pSSFP_2': 
+        spl = operators.S(1)
+        PHI = np.array([1 * i * (i + 1) / 2 for i in range(int(np.round(len(TE)/2)))] + [(-1) * i * (i + 1) / 2 for i in range(int(np.round(len(TE)/2)))])            
+    elif SEQ_CONFIG['readout'] == 'TrueFISP':
+        spl = operators.NULL
+        PHI = np.array([0, 180] * (len(TE) // 2) + [0] * (len(TE) % 2)) 
+
+    init = operators.PD(frac)
+    inversion = operators.T(180, 0)
+    rf = [operators.T(FA[i]*att, PHI[i]) for i in range(seqlen)] 
+    adc = [operators.Adc(phase=-rf[i].phi, reduce=1) for i in range(seqlen)]
+    # adc = [operators.Adc(phase=-rf[i].phi) for i in range(seqlen)]
+    rlx0 = operators.E(TI, T1, T2, duration=True) 
+    rlx1 = [operators.E(TE[i], T1, T2, cs + g, duration=True) for i in range(len(FA))] 
+    rlx2 = [operators.E(TR[i] - TE[i], T1, T2, cs + g, duration=True) for i in range(len(FA))]
+    # rlx3 = operators.E(T_recovery, T1, T2, duration=True)
+            
+    seq = Sequence([init] + [inversion] + [rlx0] + [[rf[i], rlx1[i], adc[i], rlx2[i], spl] for i in range(seqlen)])
+    
+    return seq
+    
 def modifier_inv(op, **kwargs):
     """default modifier to handle 'T1', 'T2', 'g' and 'att' keywords
     TODO: handle differential operators (options gradients and hessian)
@@ -375,7 +427,165 @@ def generate_epg_dico_T1MRF_generic_from_sequence(sequence_config,filedictconf,o
     # print("Save dictionary.")
     mrfdict = Dictionary(keys, values)
     # mrfdict.save(dictfile, overwrite=overwrite)
-    hdr={"sequence_config":sequence_config,"dict_config":dict_config,"recovery":sequence_config['T_recovery'],"window":window,"sim_mode":sim_mode}
+    hdr={"sequence_config":sequence_config,"dict_config":dict_config,"recovery":sequence_config['T_recovery'],"window":window,"sim_mode":sim_mode,"param_names":("wT1","fT1","wT2","fT2","att","df")}
+    return mrfdict,hdr,dictfile
+
+def generate_epg_dico_T1MRF(sequence_config,filedictconf,overwrite=True,sim_mode="mean",useGPU=True, batch_size=None, start=None,window=None, dest=None,prefix_dico="dico_MRF_generic"):
+
+    if type(filedictconf)==str:
+        with open(filedictconf) as f:
+            dict_config = json.load(f)
+    
+    elif type(filedictconf)==dict:
+        dict_config=filedictconf
+
+
+    
+    seq = t1_mfr_seq(sequence_config)
+    
+    
+    
+    # generate signals
+    wT1 = dict_config["water_T1"]
+    fT1 = dict_config["fat_T1"]
+    wT2 = dict_config["water_T2"]
+    fT2 = dict_config["fat_T2"]
+    att = dict_config["B1_att"]
+    df = dict_config["delta_freqs"]
+    df = [- value / 1000 for value in df]  # temp
+    
+    combinations = list(itertools.product(fT1, fT2, att, df))
+    fat_T1, fat_T2, fat_att, fat_df = zip(*combinations)
+    n_fat = len(fat_T1) 
+    
+    combinations = list(itertools.product(wT1, wT2, att, df))
+    water_T1, water_T2, water_att, water_df = zip(*combinations)
+    n_water = len(water_T1) 
+
+    TR_delay=sequence_config["dTR"]
+
+    water_amp = [1]
+    water_cs = [0]
+    fat_amp = np.array(dict_config["fat_amp"])
+    fat_cs = dict_config["fat_cshift"]
+    fat_cs = [- value / 1000 for value in fat_cs]  # temp
+
+    # other options
+    if window is None:
+        window = dict_config["window_size"]
+
+
+    if start is None:
+        dictfile = prefix_dico  +"_TR{}_reco{}.dict".format(str(TR_delay),str(sequence_config['T_recovery']))
+    else:
+        dictfile = prefix_dico + "_TR{}_reco{}_start{}.dict".format(str(TR_delay),str(sequence_config['T_recovery']),start)
+
+    if dest is not None:
+        dictfile = str(pathlib.Path(dest) / pathlib.Path(dictfile).name)
+    # print("Generating dictionary {}".format(dictfile))
+
+    if useGPU:
+        epg.set_array_module('cupy')
+    else:
+        epg.set_array_module('numpy')
+
+
+    print("Generate water signals.")
+    
+    if batch_size is not None:
+        n_batches_water = int(np.ceil(n_water / batch_size['water']))
+        n_batches_fat = int(np.ceil(n_fat / batch_size['fat']))
+        epg_opt = {"disp": True, 'max_nstate':30}
+    else:
+        n_batches_water = 1
+        n_batches_fat = 1
+        batch_size = {'water': n_water, 'fat': n_fat}
+        epg_opt = {"disp": True, 'max_nstate':30}
+    
+    water = []
+    for i in tqdm(range(n_batches_water)):
+        start = i * batch_size['water']
+        end = min((i + 1) * batch_size['water'], n_water)
+
+        # Création du batch
+        water_temp = seq(
+            T1=np.array(water_T1[start:end]),
+            T2=np.array(water_T2[start:end]),
+            att=np.array(water_att[start:end]),
+            g=np.array(water_df[start:end])[:, np.newaxis],
+            cs=[water_cs],
+            frac=[water_amp],
+            options= epg_opt
+        )
+        water.append(water_temp)
+    
+    water = np.concatenate(water, axis=0)
+    water = np.transpose(water, (1, 0))
+    # water_temp = seq(T1=np.array(water_T1[idx]), T2=np.array(water_T2[idx]), att=np.array(water_att[idx]), g=np.array(water_df[idx])[:,np.newaxis], cs=[water_cs], frac=[water_amp], options={"disp":True})
+
+    if sim_mode == "mean":
+        water = [np.mean(gp, axis=0) for gp in groupby(water, window)]
+    elif sim_mode == "mid_point":
+        if start is None:
+            start=(int(window / 2) - 1)
+
+        water = water[start:-1:window]
+    else:
+        raise ValueError("Unknow sim_mode")
+    
+    
+    water = np.array(water)
+    water = np.reshape(water, (np.shape(water)[0], np.shape(wT1)[0],np.shape(wT2)[0], 1, 1, np.shape(att)[0], np.shape(df)[0] ))
+
+    # fat
+    print("Generate fat signals.")
+    # fat_temp = seq(T1=np.array(fat_T1[idx]), T2=np.array(fat_T2[idx]), att=np.array(fat_att[idx]), g=np.array(fat_df[idx])[:,np.newaxis], cs=[fat_cs], frac=[fat_amp], options={"disp":True})
+
+    fat = []
+    for i in tqdm(range(n_batches_fat)):
+        start = i * batch_size['fat']
+        end = min((i + 1) * batch_size['fat'], n_fat)
+
+        # Création du batch
+        fat_temp = seq(
+            T1=np.array(fat_T1[start:end]),
+            T2=np.array(fat_T2[start:end]),
+            att=np.array(fat_att[start:end]),
+            g=np.array(fat_df[start:end])[:, np.newaxis],
+            cs=[fat_cs],
+            frac=[fat_amp],
+            options= epg_opt
+        )
+        fat.append(fat_temp)
+    
+    fat = np.concatenate(fat, axis=0)
+    fat = np.transpose(fat, (1, 0))
+    
+    if sim_mode == "mean":
+        fat = [np.mean(gp, axis=0) for gp in groupby(fat, window)]
+    elif sim_mode == "mid_point":
+        if start is None:
+            start=(int(window / 2) - 1)
+        fat = fat[start:-1:window]
+    else:
+        raise ValueError("Unknow sim_mode")
+
+    fat = np.array(fat)
+    fat = np.reshape(fat, (np.shape(fat)[0], 1, 1, np.shape(fT1)[0],np.shape(fT2)[0], np.shape(att)[0], np.shape(df)[0] ))
+    
+    # water = np.array(water)
+    # fat = np.array(fat)
+    # join water and fat
+    print("Build dictionary.")
+    keys = list(itertools.product(wT1, wT2, fT1, fT2, att, df))
+    values = np.stack(np.broadcast_arrays(water, fat), axis=-1)
+    
+    values = np.moveaxis(values.reshape(len(values), -1, 2), 0, 1)
+
+    # print("Save dictionary.")
+    mrfdict = Dictionary(keys, values)
+    # mrfdict.save(dictfile, overwrite=overwrite)
+    hdr={"sequence_config":sequence_config,"dict_config":dict_config,"recovery":sequence_config['T_recovery'],"window":window,"sim_mode":sim_mode,"param_names":("wT1","wT2","fT1","fT2","att","df")}
     return mrfdict,hdr,dictfile
 
 
@@ -422,7 +632,7 @@ def load_sequence_file(fileseq,recovery,min_TR_delay):
 
 #     return
 
-def generate_ImgSeries_T1MRF_generic(sequence_config,dict_config, maps, sim_mode="mean",start=None,window=None):
+def generate_ImgSeries_T1MRF_generic(sequence_config,dict_config, maps, useGPU=True, sim_mode="mean",start=None,window=None):
 
     mask_np = np.asarray(maps["mask"])
     idx = np.where(mask_np > 0)
@@ -437,10 +647,16 @@ def generate_ImgSeries_T1MRF_generic(sequence_config,dict_config, maps, sim_mode
     df = np.asarray(df)/1000
     ff = maps["FF"][idx]
 
-
+    seq = t1_mfr_seq(sequence_config)
+    if useGPU:
+        epg.set_array_module('cupy')
+    else:
+        epg.set_array_module('numpy')
+    epg_opt = {"disp": True, 'max_nstate':30}
+        
     # TR_delay=sequence_config["dTR"]
 
-    seq = T1MRF_generic(sequence_config)
+    # seq = T1MRF_generic(sequence_config)
 
 
     water_amp = [1]
@@ -465,7 +681,9 @@ def generate_ImgSeries_T1MRF_generic(sequence_config,dict_config, maps, sim_mode
 
     # water
     print("Generate water signals.")
-    water = seq(T1=wT1, T2=wT2, att=att, g=df, cs=water_cs, frac=water_amp)
+    
+    water = seq(T1=np.array(wT1), T2=np.array(wT2), att=np.array(att), g=np.array(df)[:,np.newaxis], cs=[water_cs], frac=[water_amp], options= epg_opt)
+    water = np.transpose(water, (1, 0))
     
     if sim_mode == "mean":
         water = [np.mean(gp, axis=0) for gp in groupby(water, window)]
@@ -482,8 +700,9 @@ def generate_ImgSeries_T1MRF_generic(sequence_config,dict_config, maps, sim_mode
     # eval = "dot(signal, amps)"
     # args = {"amps": fat_amp}
     # merge df and fat_cs df to dict
-    fat = seq(T1=fT1, T2=fT2, att=att, g=df, cs=fat_cs, frac=fat_amp)#, eval=eval, args=args)
-
+    fat = seq(T1=np.array(fT1), T2=np.array(fT2), att=np.array(att), g=np.array(df)[:,np.newaxis], cs=[fat_cs], frac=[fat_amp], options= epg_opt)#, eval=eval, args=args)
+    fat = np.transpose(fat, (1, 0))
+    
     if sim_mode == "mean":
         fat = [np.mean(gp, axis=0) for gp in groupby(fat, window)]
     elif sim_mode == "mid_point":

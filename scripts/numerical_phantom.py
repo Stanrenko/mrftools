@@ -31,43 +31,43 @@ with open(f"../config/config_{json_file}.json", 'r', encoding='utf-8') as fichie
 SEQ_CONFIG = cc.SEQ_CONFIG4
 # SEQ_CONFIG = cc.SEQ_CONFIG5
 
-imgseries = us.generate_ImgSeries_T1MRF_generic(sequence_config=SEQ_CONFIG, dict_config=dict_config, maps=paramMap)
-trajectory = Radial(total_nspokes = 1400, npoint = 256)
-imgseries_us = ut_mrf.undersampling_operator_new(imgseries, trajectory, np.ones((256,256)), ntimesteps=175, light_memory_usage=False)
+# imgseries = us.generate_ImgSeries_T1MRF_generic(sequence_config=SEQ_CONFIG, dict_config=dict_config, maps=paramMap)
+# trajectory = Radial(total_nspokes = 1400, npoint = 256)
+# imgseries_us = ut_mrf.undersampling_operator_new(imgseries, trajectory, np.ones((256,256)), ntimesteps=175, light_memory_usage=False)
 
-io.write('../data/phantom6/imgseries.mha', np.abs(imgseries))
-io.write('../data/phantom6/imgseries_us.mha', np.abs(imgseries_us))
-io.write('../data/phantom6/imgseries_angle.mha', np.angle(imgseries))
-io.write('../data/phantom6/imgseries_angle_us.mha', np.angle(imgseries_us))
+# io.write('../data/phantom6/imgseries.mha', np.abs(imgseries))
+# io.write('../data/phantom6/imgseries_us.mha', np.abs(imgseries_us))
+# io.write('../data/phantom6/imgseries_angle.mha', np.angle(imgseries))
+# io.write('../data/phantom6/imgseries_angle_us.mha', np.angle(imgseries_us))
 
-with open('../data/phantom6/imgseries.pkl', 'wb') as fichier:
-    pickle.dump(imgseries, fichier)
-with open('../data/phantom6/imgseries_us.pkl', 'wb') as fichier:
-    pickle.dump(imgseries_us, fichier)
+# with open('../data/phantom6/imgseries.pkl', 'wb') as fichier:
+#     pickle.dump(imgseries, fichier)
+# with open('../data/phantom6/imgseries_us.pkl', 'wb') as fichier:
+#     pickle.dump(imgseries_us, fichier)
 
 
 
-# DICT_CONFIG = cc.DICT_CONFIG2bis 
-# DICT_CONFIG_LIGHT = cc.DICT_LIGHT_CONFIG2bis
+DICT_CONFIG = cc.DICT_CONFIG2bis 
+DICT_CONFIG_LIGHT = cc.DICT_LIGHT_CONFIG2bis
 
 # DICT_CONFIG = cc.DICT_CONFIG6 
+# DICT_CONFIG = cc.DICT_LIGHT_CONFIG6
 # DICT_CONFIG_LIGHT = cc.DICT_LIGHT_CONFIG6
 
 
-# main.generate_dictionaries_mrf_generic(SEQ_CONFIG,DICT_CONFIG,DICT_CONFIG_LIGHT,dest='../dico',diconame="dico_pSSFP_test",is_build_phi=True,L0=40)
+# main.generate_dictionaries_mrf_generic(SEQ_CONFIG,DICT_CONFIG,DICT_CONFIG_LIGHT, useGPU = True, batch_size = {'water': 50000, 'fat': 50000}, dest='../dico',diconame="dico_pSSFP",is_build_phi=True,L0=40)
 
-# dico_file = '../dict/dico5_TR1.17_reco5000.pkl'
+dico_file = '../dico/dico_pSSFP_TR1.17_reco5000.pkl'
 
 
-# with open('../data/phantom6/imgseries_us.pkl', 'rb') as fichier:
-#     imgseries = pickle.load(fichier)
+with open('../data/phantom6/imgseries.pkl', 'rb') as fichier:
+    imgseries = pickle.load(fichier)
     
-# imgseries = imgseries[:,np.newaxis,:,:]
-# mask = paramMap['mask'][np.newaxis,:,:]
+imgseries = imgseries[:,np.newaxis,:,:]
+mask = paramMap['mask'][np.newaxis,:,:]
 
-# all_maps = main.build_maps(imgseries,mask,dico_file,useGPU=True,split=100,return_cost=True,pca=175,volumes_type="raw")
-# all_maps = main.build_maps(imgseries,mask,dico_file,useGPU=True,split=100,return_cost=True,pca=False,volumes_type="raw")
-# main.save_maps(all_maps, file_seqParams=None, keys=["ff", "wT1", "wT2", "attB1", "df"], dest='../data/phantom6')
+all_maps = main.build_maps(imgseries,mask,dico_file,useGPU=True,split=40,return_cost=True,pca=175,volumes_type="raw", clustering_windows= {"wT1": 2000, "wT2": 80, "fT1": 400, "fT2": 100, "att": 1.0, "df": 0.120})
+main.save_maps(all_maps, file_seqParams=None, keys=["ff", "wT1", "wT2", "att", "df"], dest='../data/phantom6')
 
 # io.write(os.path.join(phantom_folder, "wT1_map.mha"), paramMap['WATER_T1'][:,:,np.newaxis])
 # io.write(os.path.join(phantom_folder, "wT2_map.mha"), paramMap['WATER_T2'][:,:,np.newaxis])

@@ -347,7 +347,7 @@ def build_maps(volumes_all_slices,masks_all_slices,dico_full_file,useGPU=True,sp
         useGPU=False
     
     optimizer = SimpleDictSearch(mask=masks_all_slices, split=split, pca=True,
-                                                threshold_pca=pca,threshold_ff=0.9,return_cost=return_cost,useGPU_dictsearch=useGPU,volumes_type=volumes_type,clustering_windows=clustering_windows)
+                                                threshold_pca=pca,threshold_ff=1.1,return_cost=return_cost,useGPU_dictsearch=useGPU,volumes_type=volumes_type,clustering_windows=clustering_windows)
                 
     all_maps=optimizer.search_patterns_test_multi_2_steps_dico(dico_full_file,volumes_all_slices)
         
@@ -357,7 +357,7 @@ def build_maps(volumes_all_slices,masks_all_slices,dico_full_file,useGPU=True,sp
 
 
     
-def save_maps(all_maps, file_seqParams, keys = ["ff","wT1","attB1","df"]):
+def save_maps(all_maps, file_seqParams, keys = ["ff","wT1","attB1","df"], dest=None):
     '''
     generate the map images in .mha format for all params and stores the optimisation results in a .pkl
     inputs:
@@ -375,12 +375,29 @@ def save_maps(all_maps, file_seqParams, keys = ["ff","wT1","attB1","df"]):
     outputs:
     '''
 
-    file = open(file_seqParams, "rb")
-    dico_seqParams = pickle.load(file)
-    file.close()
+    if file_seqParams is not None:
+        file = open(file_seqParams, "rb")
+        dico_seqParams = pickle.load(file)
+        file.close()
 
-    path, _ = os.path.split(file_seqParams)
-    print(path)
+        path, _ = os.path.split(file_seqParams)
+        print(path)
+    else:
+        dico_seqParams = {}
+        dico_seqParams["spacing"] = (1.0, 1.0, 5.0)
+        dico_seqParams["origin"] = (0.0, 0.0, 0.0)
+        dico_seqParams["orientation"] = 'transversal'
+        dico_seqParams["offset"] = 0.0
+        dico_seqParams["is3D"] = False
+        path = dest
+        
+        
+    # file = open(file_seqParams, "rb")
+    # dico_seqParams = pickle.load(file)
+    # file.close()
+
+    # path, _ = os.path.split(file_seqParams)
+    # print(path)
 
 
     file_map=os.path.join(path,"maps.pkl")
@@ -447,7 +464,7 @@ def generate_dictionaries(sequence_file,reco,min_TR_delay,dictconf,dictconf_ligh
 
     return
 
-def generate_dictionaries_mrf_generic(sequence_config,dictconf,dictconf_light,dest=None,diconame="dico",is_build_phi=False,L0=6):
+def generate_dictionaries_mrf_generic(sequence_config,dictconf,dictconf_light,useGPU=True, batch_size = None, dest=None,diconame="dico",is_build_phi=False,L0=6):
     '''
     Generates dictionaries from sequence and dico configuration files
     inputs:
@@ -470,8 +487,10 @@ def generate_dictionaries_mrf_generic(sequence_config,dictconf,dictconf_light,de
     # _,FA_list,TE_list=load_sequence_file(sequence_file,reco,min_TR_delay/1000)
     # seq_config=create_new_seq(FA_list,TE_list,min_TR_delay/1000,TI)
 
-    mrfdict,hdr,dictfile=generate_epg_dico_T1MRF_generic_from_sequence(sequence_config,dictconf,dest=dest,prefix_dico="{}".format(diconame))
-    mrfdict_light,hdr_light,dictfile_light=generate_epg_dico_T1MRF_generic_from_sequence(sequence_config,dictconf_light,dest=dest,prefix_dico="{}_light".format(diconame))
+    # mrfdict,hdr,dictfile=generate_epg_dico_T1MRF_generic_from_sequence(sequence_config,dictconf,dest=dest,prefix_dico="{}".format(diconame))
+    # mrfdict_light,hdr_light,dictfile_light=generate_epg_dico_T1MRF_generic_from_sequence(sequence_config,dictconf_light,dest=dest,prefix_dico="{}_light".format(diconame))
+    mrfdict,hdr,dictfile=generate_epg_dico_T1MRF(sequence_config,dictconf,useGPU=useGPU, batch_size=batch_size, dest=dest,prefix_dico="{}".format(diconame))
+    mrfdict_light,hdr_light,dictfile_light=generate_epg_dico_T1MRF(sequence_config,dictconf_light,useGPU=useGPU, batch_size=batch_size, dest=dest,prefix_dico="{}_light".format(diconame))
     
     dico_full_with_hdr={"hdr":hdr,
                         "hdr_light":hdr_light,
