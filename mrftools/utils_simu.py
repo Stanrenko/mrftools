@@ -740,8 +740,8 @@ def make_numPhantom(DirName, flagSave=False, paramPhantom=None):
     if paramPhantom is None:
         paramPhantom = {'WATER_T1': [1000, 1800],
                         'WATER_T2': [20, 40],
-                        'FAT_T1': [433],
-                        'FAT_T2': [113],
+                        'FAT_T1': [300],
+                        'FAT_T2': [80],
                         'FF': [0, 1],
                         'DF': [-100, 100],
                         'att': [0.3, 1.3]

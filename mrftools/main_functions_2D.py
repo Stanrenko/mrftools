@@ -311,8 +311,6 @@ def check_dico(dico_hdr, seqParams):
 
 
 
-
-
 def build_maps(volumes_all_slices,masks_all_slices,dico_full_file,useGPU=True,split=100,return_cost=False,pca=6,volumes_type="raw",clustering_windows=DEFAULT_CLUSTERING_WINDOWS):
     '''
     builds MRF maps using bi-component dictionary matching (Slioussarenko et al. MRM 2024)
@@ -354,6 +352,48 @@ def build_maps(volumes_all_slices,masks_all_slices,dico_full_file,useGPU=True,sp
 
     
     return all_maps
+
+# def build_maps_bak(volumes_all_slices,masks_all_slices,dico_full_file,useGPU=True,split=100,return_cost=False,pca=6,volumes_type="raw"):
+#     '''
+#     builds MRF maps using bi-component dictionary matching (Slioussarenko et al. MRM 2024)
+#     inputs:
+#     volumes_all_slices - time serie of undersampled volumes size ntimesteps x nb_slices x npoint/2 x npoint/2 (numpy array)
+#     masks_all_slices - mask of size nb_slices x npoint/2 x npoint/2 (numpy array)
+#     dico_full_file - light and full dictionaries with headers (.pkl)
+#     file_config - optimization options
+#     useGPU - wheter to use GPU
+#     split - signal batch count for memory management (int)
+#     return_cost - whether to return additional maps (e.g. proton density, phase and cost)
+#     pca - number of temporal pca components retained (int)
+#     phi - temporal basis (numpy array)
+#     volumes_type - "raw" or "singular" - depending on the input volumes ("raw" time serie of undersampled volumes / "singular" singular volumes)
+    
+
+#     outputs:
+#     all_maps: tuple containing for all iterations 
+#             (maps - dictionary with parameter maps for all keys
+#              mask - numpy array
+#              cost map (OPTIONAL)
+#              phase map - numpy array (OPTIONAL)
+#              proton density map - numpy array (OPTIONAL)
+#              matched_signals - numpy array  (OPTIONAL))
+
+#     '''
+
+#     try:
+#         import cupy
+#     except:
+#         print("Could not import cupy - not using gpu")
+#         useGPU=False
+    
+#     optimizer = SimpleDictSearch(mask=masks_all_slices, split=split, pca=True,
+#                                                 threshold_pca=pca,threshold_ff=1.1,return_cost=return_cost,useGPU_dictsearch=useGPU,volumes_type=volumes_type)
+                
+#     all_maps=optimizer.search_patterns_test_multi_2_steps_dico(dico_full_file,volumes_all_slices)
+        
+
+    
+#     return all_maps
 
 
     

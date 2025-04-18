@@ -19,8 +19,8 @@ import logging
 logging.basicConfig(level=logging.INFO)
 
 json_file = 'dicoB0'
-phantom_file = r'/mnt/rmn_files/0_Wip/New/1_Methodological_Developments/1_Methodologie_3T/&3_2017_Fingerprinting_FF_T1/3_Data/4_Simulations/DataBase_Num_Ph_Python/V5/Phantom7/paramMap.pkl'
-phantom_folder = r'/mnt/rmn_files/0_Wip/New/1_Methodological_Developments/1_Methodologie_3T/&3_2017_Fingerprinting_FF_T1/3_Data/4_Simulations/DataBase_Num_Ph_Python/V5/Phantom7'
+phantom_file = r'/mnt/rmn_files/0_Wip/New/1_Methodological_Developments/1_Methodologie_3T/&3_2017_Fingerprinting_FF_T1/3_Data/4_Simulations/DataBase_Num_Ph_Python/V5/Phantom8/paramMap.pkl'
+phantom_folder = r'/mnt/rmn_files/0_Wip/New/1_Methodological_Developments/1_Methodologie_3T/&3_2017_Fingerprinting_FF_T1/3_Data/4_Simulations/DataBase_Num_Ph_Python/V5/Phantom8'
 
 with open(phantom_file, 'rb') as fichier:
     paramMap = pickle.load(fichier)
@@ -35,14 +35,14 @@ SEQ_CONFIG = cc.SEQ_CONFIG4
 # trajectory = Radial(total_nspokes = 1400, npoint = 256)
 # imgseries_us = ut_mrf.undersampling_operator_new(imgseries, trajectory, np.ones((256,256)), ntimesteps=175, light_memory_usage=False)
 
-# io.write('../data/phantom6/imgseries.mha', np.abs(imgseries))
-# io.write('../data/phantom6/imgseries_us.mha', np.abs(imgseries_us))
-# io.write('../data/phantom6/imgseries_angle.mha', np.angle(imgseries))
-# io.write('../data/phantom6/imgseries_angle_us.mha', np.angle(imgseries_us))
+# io.write('../data/phantom8/imgseries.mha', np.abs(imgseries))
+# io.write('../data/phantom8/imgseries_us.mha', np.abs(imgseries_us))
+# io.write('../data/phantom8/imgseries_angle.mha', np.angle(imgseries))
+# io.write('../data/phantom8/imgseries_angle_us.mha', np.angle(imgseries_us))
 
-# with open('../data/phantom6/imgseries.pkl', 'wb') as fichier:
+# with open('../data/phantom8/imgseries.pkl', 'wb') as fichier:
 #     pickle.dump(imgseries, fichier)
-# with open('../data/phantom6/imgseries_us.pkl', 'wb') as fichier:
+# with open('../data/phantom8/imgseries_us.pkl', 'wb') as fichier:
 #     pickle.dump(imgseries_us, fichier)
 
 
@@ -60,14 +60,16 @@ DICT_CONFIG_LIGHT = cc.DICT_LIGHT_CONFIG2bis
 dico_file = '../dico/dico_pSSFP_TR1.17_reco5000.pkl'
 
 
-with open('../data/phantom6/imgseries.pkl', 'rb') as fichier:
+with open('../data/phantom8/imgseries_us.pkl', 'rb') as fichier:
     imgseries = pickle.load(fichier)
     
 imgseries = imgseries[:,np.newaxis,:,:]
 mask = paramMap['mask'][np.newaxis,:,:]
 
-all_maps = main.build_maps(imgseries,mask,dico_file,useGPU=True,split=40,return_cost=True,pca=175,volumes_type="raw", clustering_windows= {"wT1": 2000, "wT2": 80, "fT1": 400, "fT2": 100, "att": 1.0, "df": 0.120})
-main.save_maps(all_maps, file_seqParams=None, keys=["ff", "wT1", "wT2", "att", "df"], dest='../data/phantom6')
+# all_maps = main.build_maps(imgseries,mask,dico_file,useGPU=True,split=40,return_cost=True,pca=175,volumes_type="raw", clustering_windows= {"wT1": 2000, "wT2": 80, "fT1": 400, "fT2": 100, "att": 1.0, "df": 0.120})
+all_maps = main.build_maps(imgseries,mask,dico_file,useGPU=True,split=40,return_cost=True,pca=20,volumes_type="raw")
+main.save_maps(all_maps, file_seqParams=None, keys=["ff", "wT1", "wT2", "att", "df"], dest='../data/phantom8')
+# main.save_maps(all_maps, file_seqParams=None, keys=["ff", "wT1", "wT2", "attB1", "df"], dest='../data/phantom6')
 
 # io.write(os.path.join(phantom_folder, "wT1_map.mha"), paramMap['WATER_T1'][:,:,np.newaxis])
 # io.write(os.path.join(phantom_folder, "wT2_map.mha"), paramMap['WATER_T2'][:,:,np.newaxis])
