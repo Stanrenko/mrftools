@@ -25,10 +25,10 @@ phantom_folder = r'/mnt/rmn_files/0_Wip/New/1_Methodological_Developments/1_Meth
 with open(phantom_file, 'rb') as fichier:
     paramMap = pickle.load(fichier)
 
-with open(f"../config/config_{json_file}.json", 'r', encoding='utf-8') as fichier:
-    dict_config = json.load(fichier)
+# with open(f"../config/config_{json_file}.json", 'r', encoding='utf-8') as fichier:
+#     dict_config = json.load(fichier)
 
-SEQ_CONFIG = cc.SEQ_CONFIG4
+# SEQ_CONFIG = cc.SEQ_CONFIG4
 # SEQ_CONFIG = cc.SEQ_CONFIG5
 
 # imgseries = us.generate_ImgSeries_T1MRF_generic(sequence_config=SEQ_CONFIG, dict_config=dict_config, maps=paramMap)
@@ -47,8 +47,8 @@ SEQ_CONFIG = cc.SEQ_CONFIG4
 
 
 
-DICT_CONFIG = cc.DICT_CONFIG2bis 
-DICT_CONFIG_LIGHT = cc.DICT_LIGHT_CONFIG2bis
+# DICT_CONFIG = cc.DICT_CONFIG2bis 
+# DICT_CONFIG_LIGHT = cc.DICT_LIGHT_CONFIG2bis
 
 # DICT_CONFIG = cc.DICT_CONFIG6 
 # DICT_CONFIG = cc.DICT_LIGHT_CONFIG6
@@ -57,18 +57,18 @@ DICT_CONFIG_LIGHT = cc.DICT_LIGHT_CONFIG2bis
 
 # main.generate_dictionaries_mrf_generic(SEQ_CONFIG,DICT_CONFIG,DICT_CONFIG_LIGHT, useGPU = True, batch_size = {'water': 50000, 'fat': 50000}, dest='../dico',diconame="dico_pSSFP",is_build_phi=True,L0=40)
 
-dico_file = '../dico/dico_pSSFP_TR1.17_reco5000.pkl'
+# dico_file = '../dico/dico_pSSFP_TR1.17_reco5000.pkl'
 
 
-with open('../data/phantom8/imgseries_us.pkl', 'rb') as fichier:
-    imgseries = pickle.load(fichier)
+# with open('../data/phantom8/imgseries_us.pkl', 'rb') as fichier:
+#     imgseries = pickle.load(fichier)
     
-imgseries = imgseries[:,np.newaxis,:,:]
-mask = paramMap['mask'][np.newaxis,:,:]
+# imgseries = imgseries[:,np.newaxis,:,:]
+# mask = paramMap['mask'][np.newaxis,:,:]
 
 # all_maps = main.build_maps(imgseries,mask,dico_file,useGPU=True,split=40,return_cost=True,pca=175,volumes_type="raw", clustering_windows= {"wT1": 2000, "wT2": 80, "fT1": 400, "fT2": 100, "att": 1.0, "df": 0.120})
-all_maps = main.build_maps(imgseries,mask,dico_file,useGPU=True,split=40,return_cost=True,pca=20,volumes_type="raw")
-main.save_maps(all_maps, file_seqParams=None, keys=["ff", "wT1", "wT2", "att", "df"], dest='../data/phantom8')
+# all_maps = main.build_maps(imgseries,mask,dico_file,useGPU=True,split=40,return_cost=True,pca=20,volumes_type="raw")
+# main.save_maps(all_maps, file_seqParams=None, keys=["ff", "wT1", "wT2", "att", "df"], dest='../data/phantom8')
 # main.save_maps(all_maps, file_seqParams=None, keys=["ff", "wT1", "wT2", "attB1", "df"], dest='../data/phantom6')
 
 # io.write(os.path.join(phantom_folder, "wT1_map.mha"), paramMap['WATER_T1'][:,:,np.newaxis])

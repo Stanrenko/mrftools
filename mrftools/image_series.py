@@ -7,12 +7,12 @@ except:
     pass
 
 
-from utils_simu import simulate_gen_eq_signal
+# from mrftools.utils_simu import simulate_gen_eq_signal
 from scipy import ndimage
 
-
+import epgpy as epg
 import pandas as pd
-from utils_mrf import create_random_map,voronoi_volumes,normalize_image_series,build_mask_from_volume,generate_kdata,build_mask_single_image,buildROImask,correct_mvt_kdata,create_map
+# from mrftools.utils_mrf import create_random_map,voronoi_volumes,normalize_image_series,build_mask_from_volume,generate_kdata,build_mask_single_image,buildROImask,correct_mvt_kdata,create_map
 from mutools.optim.dictsearch import dictmodel
 
 from mrftools.utils_mrf import makevol
@@ -21,7 +21,7 @@ import itertools
 import finufft
 from tqdm import tqdm
 import matplotlib.animation as animation
-from trajectory import *
+from mrftools.trajectory import *
 
 try:
     import pycuda.autoinit
@@ -193,6 +193,7 @@ class ImageSeries(object):
             water=water.T
 
         else:
+            # water = seq(T1=wT1_in_map, T2=wT2_in_map, att=[[attB1_in_map]], g=[[[df_in_map]]])
             water = seq(T1=wT1_in_map, T2=wT2_in_map, att=[[attB1_in_map]], g=[[[df_in_map]]])
 
 
@@ -288,106 +289,198 @@ class ImageSeries(object):
 
         self.cached_images_series=images_series
 
-    def build_ref_images_bloch(self,TR_, FA_, TE_,norm=None,phase=None):
-        print("Building Ref Images")
-        if self.paramMap is None:
-            return ValueError("buildparamMap should be called prior to image simulation")
+    def build_ref_images_v2(self,seq, useGPU=True, phase=None):
 
-        list_keys = ["wT1","wT2","fT1","fT2","attB1","df","ff"]
-        for k in list_keys:
-            if k not in self.paramMap:
-                raise ValueError("key {} should be in the paramMap".format(k))
+        # mask_np = np.asarray(maps["mask"])
+        # idx = np.where(mask_np > 0)
+        
+        # generate signals
+        wT1 = self.paramMap['wT1']
+        fT1 = self.paramMap['fT1']
+        wT2 = self.paramMap['wT2']
+        fT2 = self.paramMap['fT2']
+        att = self.paramMap['attB1']
+        df = self.paramMap['df']
+        df = np.asarray(df)/1000
+        ff = self.paramMap['ff']
 
-        map_all_on_mask = np.stack(list(self.paramMap.values())[:-1], axis=-1)
-        map_ff_on_mask = self.paramMap["ff"]
+        if useGPU:
+            epg.set_array_module('cupy')
+        else:
+            epg.set_array_module('numpy')
+        epg_opt = {"disp": True, 'max_nstate':30}
+            
+        # TR_delay=sequence_config["dTR"]
 
-        params_all = np.reshape(map_all_on_mask, (-1, 6))
-        params_unique = np.unique(params_all, axis=0)
+        # seq = T1MRF_generic(sequence_config)
 
-        wT1_in_map = np.unique(params_unique[:, 0])
-        wT2_in_map = np.unique(params_unique[:, 1])
-        fT1_in_map = np.unique(params_unique[:, 2])
-        fT2_in_map = np.unique(params_unique[:, 3])
-        attB1_in_map = np.unique(params_unique[:, 4])
-        df_in_map = np.unique(params_unique[:, 5])
 
-        # Simulating the image sequence
+        water_amp = [1]
+        water_cs = [0]
+        fat_amp = self.fat_amp
+        fat_cs = self.fat_cs
+    
+
+        # other options
+        # if window is None:
+        #     window = dict_config["window_size"]
+
+
+        # if start is None:
+        #     dictfile = prefix_dico  +"_TR{}_reco{}.dict".format(str(TR_delay),str(sequence_config['T_recovery']))
+        # else:
+        #     dictfile = prefix_dico + "_TR{}_reco{}_start{}.dict".format(str(TR_delay),str(sequence_config['T_recovery']),start)
+
+        # if dest is not None:
+        #     dictfile = str(pathlib.Path(dest) / pathlib.Path(dictfile).name)
+        # print("Generating dictionary {}".format(dictfile))
 
         # water
-        print("Simulating Signals")
-
-        s, water, fat, keys=simulate_gen_eq_signal(TR_, FA_, TE_, [0.1], df_in_map*1000, wT1_in_map/1000, fT1_in_map[0] / 1000, attB1_in_map, T_2w=wT2_in_map[0] / 1000, T_2f=fT2_in_map[0] / 1000,
-                               amp=np.array(self.fat_amp), shift=np.array(self.fat_cs)*1000, sigma=None, group_size=1,
-                               return_fat_water=True)  # ,amp=np.array([1]),shift=np.array([-418]),sigma=None):
-
-        # if self.paramDict["sim_mode"]=="mean":
-        #     fat = [np.mean(gp, axis=0) for gp in groupby(fat, window)]
-        # elif self.paramDict["sim_mode"]=="mid_point":
-        #     fat = fat[(int(window / 2) - 1):-1:window]
-        # else:
-        #     raise ValueError("Unknow sim_mode")
-
-        # building the time axis
-        self.build_timeline(np.array(TR_[1:])*1000)
+        print("Generate water signals.")
+        
+        water = seq(T1=np.array(wT1), T2=np.array(wT2), att=np.array(att), g=np.array(df)[:,np.newaxis], cs=[water_cs], frac=[water_amp], options= epg_opt)
+        water = np.transpose(water, (1, 0))
 
 
-        # join water and fat
-        print("Build dictionary.")
+        # fat
+        print("Generate fat signals.")
+        # eval = "dot(signal, amps)"
+        # args = {"amps": fat_amp}
+        # merge df and fat_cs df to dict
+        fat = seq(T1=np.array(fT1), T2=np.array(fT2), att=np.array(att), g=np.array(df)[:,np.newaxis], cs=[fat_cs], frac=[fat_amp], options= epg_opt)#, eval=eval, args=args)
+        fat = np.transpose(fat, (1, 0))
+        
 
-        water=water.reshape(water.shape[0],-1)
-        fat = fat.reshape(fat.shape[0], -1)
-        if self.paramDict["gen_mode"] == "loop":
-            values=np.stack((water, fat),axis=-1)
-            values = np.moveaxis(values, 0, 1)
-        else :
-            values = np.stack(np.broadcast_arrays(water, fat), axis=-1)
-            values = np.moveaxis(values.reshape(len(values), -1, 2), 0, 1)
-        mrfdict = dictmodel.Dictionary(keys, values)
+        water = np.array(water)
+        fat = np.array(fat)
+        
+        signal = (1-np.asarray(ff))*water + np.asarray(ff)*fat
+        
+        # # join water and fat
+        # print("Build dictionary.")
+        # keys = list(itertools.product(wT1, wT2, fT1, fT2, att, df))
+        # values = np.stack(np.broadcast_arrays(water, fat), axis=-1)
+        # values = np.moveaxis(values.reshape(len(values), -1, 2), 0, 1)
 
-        images_series = np.zeros(self.image_size + (values.shape[-2],), dtype=np.complex_)
-        #water_series = images_series.copy()
-        #fat_series = images_series.copy()
-
-        map_all_with_ff = np.append(map_all_on_mask, map_ff_on_mask.reshape(-1, 1), axis=-1)
-        #unique_values, index_unique = np.unique(map_all_with_ff, return_inverse=True,axis=0)
-
-        #images_in_mask_unique = np.array(
-        #    [mrfdict[tuple(pixel_params[:-1])][:, 0] * (1 - pixel_params[-1]) + mrfdict[tuple(
-        #        pixel_params[:-1])][:, 1] * (pixel_params[-1]) for pixel_params in unique_values])
-        print("Building image series")
-        map_all_on_mask = map_all_on_mask[:, [0, 2, 4, 5]]
-        map_all_on_mask[:,0]/=1000
-        map_all_on_mask[:, 1] /= 1000
-        map_all_on_mask[:, 3] *= 1000
-        images_in_mask = np.array([mrfdict[tuple(pixel_params)][:, 0] * (1 - map_ff_on_mask[i]) + mrfdict[tuple(
-            pixel_params)][:, 1] * (map_ff_on_mask[i]) for (i, pixel_params) in enumerate(map_all_on_mask)])
-
-        if norm is not None :
-            images_in_mask *= np.expand_dims(norm,axis=1)
-
+        # # print("Save dictionary.")
+        # mrfdict = Dictionary(keys, values)
+        # # mrfdict.save(dictfile, overwrite=overwrite)
+        # hdr={"sequence_config":sequence_config,"dict_config":dict_config,"recovery":sequence_config['T_recovery'],"initial_repetitions":sequence_config['nrep'],"window":window,"sim_mode":sim_mode}
+        imgseries = np.zeros((signal.shape[0], self.mask.shape[0], self.mask.shape[1]), dtype=np.complex64)
+        imgseries = imgseries.reshape(signal.shape[0], -1)
+        imgseries[:, self.mask.flatten() > 0] = signal
+        imgseries = imgseries.reshape(signal.shape[0], self.mask.shape[0], self.mask.shape[1])
+        
         if phase is not None:
-            images_in_mask *= np.expand_dims(np.exp(1j*phase),axis=1)
-
-        #water_in_mask = np.array([mrfdict[tuple(pixel_params)][:, 0]  for (i, pixel_params) in enumerate(map_all_on_mask)])
-        #fat_in_mask = np.array([mrfdict[tuple(pixel_params)][:, 1]  for (i, pixel_params) in enumerate(map_all_on_mask)])
-        print("Image series built")
-
-        images_series[self.mask > 0, :] = images_in_mask
-        #water_series[self.mask > 0, :] = water_in_mask
-        #fat_series[self.mask > 0, :] = fat_in_mask
-
-        images_series = np.moveaxis(images_series, -1, 0)
-        #water_series = np.moveaxis(water_series, -1, 0)
-        #fat_series = np.moveaxis(fat_series, -1, 0)
-
-        #images_series=images_series.astype("complex64")
-        #images_series=normalize_image_series(images_series)
-        self.images_series=images_series
+            imgseries *= np.exp(1j*phase)
+        
+        self.images_series=imgseries
 
         #self.water_series = water_series
         #self.fat_series=fat_series
 
-        self.cached_images_series=images_series
+        self.cached_images_series=imgseries
+
+    # def build_ref_images_bloch(self,TR_, FA_, TE_,norm=None,phase=None):
+    #     print("Building Ref Images")
+    #     if self.paramMap is None:
+    #         return ValueError("buildparamMap should be called prior to image simulation")
+
+    #     list_keys = ["wT1","wT2","fT1","fT2","attB1","df","ff"]
+    #     for k in list_keys:
+    #         if k not in self.paramMap:
+    #             raise ValueError("key {} should be in the paramMap".format(k))
+
+    #     map_all_on_mask = np.stack(list(self.paramMap.values())[:-1], axis=-1)
+    #     map_ff_on_mask = self.paramMap["ff"]
+
+    #     params_all = np.reshape(map_all_on_mask, (-1, 6))
+    #     params_unique = np.unique(params_all, axis=0)
+
+    #     wT1_in_map = np.unique(params_unique[:, 0])
+    #     wT2_in_map = np.unique(params_unique[:, 1])
+    #     fT1_in_map = np.unique(params_unique[:, 2])
+    #     fT2_in_map = np.unique(params_unique[:, 3])
+    #     attB1_in_map = np.unique(params_unique[:, 4])
+    #     df_in_map = np.unique(params_unique[:, 5])
+
+    #     # Simulating the image sequence
+
+    #     # water
+    #     print("Simulating Signals")
+
+    #     s, water, fat, keys=simulate_gen_eq_signal(TR_, FA_, TE_, [0.1], df_in_map*1000, wT1_in_map/1000, fT1_in_map[0] / 1000, attB1_in_map, T_2w=wT2_in_map[0] / 1000, T_2f=fT2_in_map[0] / 1000,
+    #                            amp=np.array(self.fat_amp), shift=np.array(self.fat_cs)*1000, sigma=None, group_size=1,
+    #                            return_fat_water=True)  # ,amp=np.array([1]),shift=np.array([-418]),sigma=None):
+
+    #     # if self.paramDict["sim_mode"]=="mean":
+    #     #     fat = [np.mean(gp, axis=0) for gp in groupby(fat, window)]
+    #     # elif self.paramDict["sim_mode"]=="mid_point":
+    #     #     fat = fat[(int(window / 2) - 1):-1:window]
+    #     # else:
+    #     #     raise ValueError("Unknow sim_mode")
+
+    #     # building the time axis
+    #     self.build_timeline(np.array(TR_[1:])*1000)
+
+
+    #     # join water and fat
+    #     print("Build dictionary.")
+
+    #     water=water.reshape(water.shape[0],-1)
+    #     fat = fat.reshape(fat.shape[0], -1)
+    #     if self.paramDict["gen_mode"] == "loop":
+    #         values=np.stack((water, fat),axis=-1)
+    #         values = np.moveaxis(values, 0, 1)
+    #     else :
+    #         values = np.stack(np.broadcast_arrays(water, fat), axis=-1)
+    #         values = np.moveaxis(values.reshape(len(values), -1, 2), 0, 1)
+    #     mrfdict = dictmodel.Dictionary(keys, values)
+
+    #     images_series = np.zeros(self.image_size + (values.shape[-2],), dtype=np.complex_)
+    #     #water_series = images_series.copy()
+    #     #fat_series = images_series.copy()
+
+    #     map_all_with_ff = np.append(map_all_on_mask, map_ff_on_mask.reshape(-1, 1), axis=-1)
+    #     #unique_values, index_unique = np.unique(map_all_with_ff, return_inverse=True,axis=0)
+
+    #     #images_in_mask_unique = np.array(
+    #     #    [mrfdict[tuple(pixel_params[:-1])][:, 0] * (1 - pixel_params[-1]) + mrfdict[tuple(
+    #     #        pixel_params[:-1])][:, 1] * (pixel_params[-1]) for pixel_params in unique_values])
+    #     print("Building image series")
+    #     map_all_on_mask = map_all_on_mask[:, [0, 2, 4, 5]]
+    #     map_all_on_mask[:,0]/=1000
+    #     map_all_on_mask[:, 1] /= 1000
+    #     map_all_on_mask[:, 3] *= 1000
+    #     images_in_mask = np.array([mrfdict[tuple(pixel_params)][:, 0] * (1 - map_ff_on_mask[i]) + mrfdict[tuple(
+    #         pixel_params)][:, 1] * (map_ff_on_mask[i]) for (i, pixel_params) in enumerate(map_all_on_mask)])
+
+    #     if norm is not None :
+    #         images_in_mask *= np.expand_dims(norm,axis=1)
+
+    #     if phase is not None:
+    #         images_in_mask *= np.expand_dims(np.exp(1j*phase),axis=1)
+
+    #     #water_in_mask = np.array([mrfdict[tuple(pixel_params)][:, 0]  for (i, pixel_params) in enumerate(map_all_on_mask)])
+    #     #fat_in_mask = np.array([mrfdict[tuple(pixel_params)][:, 1]  for (i, pixel_params) in enumerate(map_all_on_mask)])
+    #     print("Image series built")
+
+    #     images_series[self.mask > 0, :] = images_in_mask
+    #     #water_series[self.mask > 0, :] = water_in_mask
+    #     #fat_series[self.mask > 0, :] = fat_in_mask
+
+    #     images_series = np.moveaxis(images_series, -1, 0)
+    #     #water_series = np.moveaxis(water_series, -1, 0)
+    #     #fat_series = np.moveaxis(fat_series, -1, 0)
+
+    #     #images_series=images_series.astype("complex64")
+    #     #images_series=normalize_image_series(images_series)
+    #     self.images_series=images_series
+
+    #     #self.water_series = water_series
+    #     #self.fat_series=fat_series
+
+    #     self.cached_images_series=images_series
 
 
     def build_timeline(self,TR_list):
@@ -734,12 +827,12 @@ class ImageSeries(object):
         #kdata = np.array(kdata) / (npoint * self.paramDict["nb_rep"]) * dtheta
 
         # kdata /= np.sum(np.abs(kdata) ** 2) ** 0.5 / len(kdata)
-        if movement_correction:
-            transf = self.list_movements[0].paramDict["transformation"]
-            t = self.t
-            kdata_corrected,traj_corrected,retained_timesteps = correct_mvt_kdata(kdata,traj,t,transf,perc)
+        # if movement_correction:
+        #     transf = self.list_movements[0].paramDict["transformation"]
+        #     t = self.t
+        #     kdata_corrected,traj_corrected,retained_timesteps = correct_mvt_kdata(kdata,traj,t,transf,perc)
 
-            return kdata_corrected,traj_corrected,retained_timesteps
+        #     return kdata_corrected,traj_corrected,retained_timesteps
 
         return kdata
 
@@ -762,8 +855,8 @@ class ImageSeries(object):
 
         return kdata
 
-    def buildROImask(self):
-        return buildROImask(self.paramMap)
+    # def buildROImask(self):
+    #     return buildROImask(self.paramMap)
 
 
     # def generate_kdata(self,traj):
@@ -926,72 +1019,72 @@ class ImageSeries(object):
         plt.show()
 
 
-class RandomMap(ImageSeries):
+# class RandomMap(ImageSeries):
 
-    def __init__(self,name,dict_config,**kwargs):
-        super().__init__(name,dict_config,**kwargs)
+#     def __init__(self,name,dict_config,**kwargs):
+#         super().__init__(name,dict_config,**kwargs)
 
-        self.region_size=self.paramDict["region_size"]
+#         self.region_size=self.paramDict["region_size"]
 
-        if "mask_reduction_factor" not in self.paramDict:
-            self.paramDict["mask_reduction_factor"] =0.0# mask_reduction_factors*total_pixels will be cropped on all edges of the image
+#         if "mask_reduction_factor" not in self.paramDict:
+#             self.paramDict["mask_reduction_factor"] =0.0# mask_reduction_factors*total_pixels will be cropped on all edges of the image
 
-        mask_red = self.paramDict["mask_reduction_factor"]
-        mask = np.zeros(self.image_size)
-        mask[int(self.image_size[0] *mask_red):int(self.image_size[0]*(1-mask_red)), int(self.image_size[1] *mask_red):int(self.image_size[1]*(1-mask_red))] = 1.0
-        self.mask=mask
+#         mask_red = self.paramDict["mask_reduction_factor"]
+#         mask = np.zeros(self.image_size)
+#         mask[int(self.image_size[0] *mask_red):int(self.image_size[0]*(1-mask_red)), int(self.image_size[1] *mask_red):int(self.image_size[1]*(1-mask_red))] = 1.0
+#         self.mask=mask
 
-    @wrapper_rounding
-    def buildParamMap(self,mask=None):
-        #print("Building Param Map")
-        if mask is None:
-            mask=self.mask
-        else:
-            self.mask=mask
+#     @wrapper_rounding
+#     def buildParamMap(self,mask=None):
+#         #print("Building Param Map")
+#         if mask is None:
+#             mask=self.mask
+#         else:
+#             self.mask=mask
 
-        wT1 = self.dict_config["water_T1"]
-        fT1 = self.dict_config["fat_T1"]
-        wT2 = self.dict_config["water_T2"]
-        fT2 = self.dict_config["fat_T2"]
-        att = self.dict_config["B1_att"]
-        df = self.dict_config["delta_freqs"]
-        df = [- value / 1000 for value in df]
-        ff = self.dict_config["ff"]
+#         wT1 = self.dict_config["water_T1"]
+#         fT1 = self.dict_config["fat_T1"]
+#         wT2 = self.dict_config["water_T2"]
+#         fT2 = self.dict_config["fat_T2"]
+#         att = self.dict_config["B1_att"]
+#         df = self.dict_config["delta_freqs"]
+#         df = [- value / 1000 for value in df]
+#         ff = self.dict_config["ff"]
 
-        map_wT1 = create_random_map(wT1, self.region_size, self.image_size, mask)
-        map_wT2 = create_random_map([wT2], self.region_size, self.image_size, mask)
-        map_fT1 = create_random_map(fT1, self.region_size, self.image_size, mask)
-        map_fT2 = create_random_map([fT2], self.region_size, self.image_size, mask)
-        map_attB1 = create_random_map(att, self.region_size, self.image_size, mask)
-        map_df = create_random_map(df, self.region_size, self.image_size, mask)
-        map_ff = create_random_map(ff, self.region_size, self.image_size, mask)
-        map_all = np.stack((map_wT1, map_wT2, map_fT1, map_fT2, map_attB1, map_df, map_ff), axis=-1)
-        map_all_on_mask = map_all[mask > 0]
+#         map_wT1 = create_random_map(wT1, self.region_size, self.image_size, mask)
+#         map_wT2 = create_random_map([wT2], self.region_size, self.image_size, mask)
+#         map_fT1 = create_random_map(fT1, self.region_size, self.image_size, mask)
+#         map_fT2 = create_random_map([fT2], self.region_size, self.image_size, mask)
+#         map_attB1 = create_random_map(att, self.region_size, self.image_size, mask)
+#         map_df = create_random_map(df, self.region_size, self.image_size, mask)
+#         map_ff = create_random_map(ff, self.region_size, self.image_size, mask)
+#         map_all = np.stack((map_wT1, map_wT2, map_fT1, map_fT2, map_attB1, map_df, map_ff), axis=-1)
+#         map_all_on_mask = map_all[mask > 0]
 
 
-        self.paramMap = {
-            "wT1": map_all_on_mask[:, 0],
-            "wT2": map_all_on_mask[:, 1],
-            "fT1": map_all_on_mask[:, 2],
-            "fT2": map_all_on_mask[:, 3],
-            "attB1": map_all_on_mask[:, 4],
-            "df": map_all_on_mask[:, 5],
-            "ff": map_all_on_mask[:, 6]
+#         self.paramMap = {
+#             "wT1": map_all_on_mask[:, 0],
+#             "wT2": map_all_on_mask[:, 1],
+#             "fT1": map_all_on_mask[:, 2],
+#             "fT2": map_all_on_mask[:, 3],
+#             "attB1": map_all_on_mask[:, 4],
+#             "df": map_all_on_mask[:, 5],
+#             "ff": map_all_on_mask[:, 6]
 
-        }
+#         }
 
-    def buildROImask(self):
-        mask_red = self.paramDict["mask_reduction_factor"]
-        sliced_image_size = (self.image_size[0], self.image_size[0])
-        num_regions_shape = (int(sliced_image_size[0] * (1 - 2 * mask_red) / self.region_size),
-                             int(sliced_image_size[1] * ((1 - 2 * mask_red)) / self.region_size))
-        count_regions_per_slice = np.prod(num_regions_shape)
+#     def buildROImask(self):
+#         mask_red = self.paramDict["mask_reduction_factor"]
+#         sliced_image_size = (self.image_size[0], self.image_size[0])
+#         num_regions_shape = (int(sliced_image_size[0] * (1 - 2 * mask_red) / self.region_size),
+#                              int(sliced_image_size[1] * ((1 - 2 * mask_red)) / self.region_size))
+#         count_regions_per_slice = np.prod(num_regions_shape)
 
-        current_roi_num=1
-        rois = np.arange(current_roi_num, current_roi_num + count_regions_per_slice).reshape(num_regions_shape)
-        rois = np.repeat(np.repeat(rois, self.region_size, axis=1), self.region_size, axis=0).flatten()
+#         current_roi_num=1
+#         rois = np.arange(current_roi_num, current_roi_num + count_regions_per_slice).reshape(num_regions_shape)
+#         rois = np.repeat(np.repeat(rois, self.region_size, axis=1), self.region_size, axis=0).flatten()
 
-        return rois
+#         return rois
 
 
 
@@ -1125,23 +1218,27 @@ class MapFromDict(ImageSeries):
 
         paramMap = self.paramDict["paramMap"]
 
-        map_wT1=paramMap["wT1"]
+        map_wT1=self.paramDict["paramMap"]["WATER_T1"]
         self.image_size=map_wT1.shape
 
-        if "mask" in self.paramDict:
-            mask=self.paramDict["mask"]
+        if "mask" in self.paramDict["paramMap"]:
+            mask=self.paramDict["paramMap"]["mask"]
+            print('hello1')
 
         else:
             mask = np.zeros(self.image_size)
             mask[map_wT1>0]=1.0
-
+            print('hello2')
+        
+            
         self.mask=mask
 
-        map_wT2 = mask*self.paramDict["default_wT2"]
-        map_fT1 = mask*self.paramDict["default_fT1"]
-        map_fT2 = mask*self.paramDict["default_fT2"]
+        # map_wT2 = mask*self.paramDict["default_wT2"]
+        # map_fT1 = mask*self.paramDict["default_fT1"]
+        # map_fT2 = mask*self.paramDict["default_fT2"]
 
-        map_all = np.stack((paramMap["wT1"], map_wT2, map_fT1, map_fT2, paramMap["attB1"], paramMap["df"], paramMap["ff"]), axis=-1)
+        # map_all = np.stack((paramMap["wT1"], map_wT2, map_fT1, map_fT2, paramMap["attB1"], paramMap["df"], paramMap["ff"]), axis=-1)
+        map_all = np.stack((self.paramDict["paramMap"]["WATER_T1"], self.paramDict["paramMap"]["WATER_T2"], self.paramDict["paramMap"]["FAT_T1"], self.paramDict["paramMap"]["FAT_T2"], self.paramDict["paramMap"]["att"], self.paramDict["paramMap"]["DF"], self.paramDict["paramMap"]["FF"]), axis=-1)
         map_all_on_mask = map_all[mask > 0]
 
         self.paramMap = {
@@ -1446,126 +1543,126 @@ class MapFromDict3D(ImageSeries3D):
 
 
 
-class RandomMap3D(ImageSeries3D):
+# class RandomMap3D(ImageSeries3D):
 
-    def __init__(self, name,dict_config, **kwargs):
-        super().__init__(name, dict_config, **kwargs)
+#     def __init__(self, name,dict_config, **kwargs):
+#         super().__init__(name, dict_config, **kwargs)
 
-        self.region_size = self.paramDict["region_size"]
+#         self.region_size = self.paramDict["region_size"]
 
-        if "mask_reduction_factor" not in self.paramDict:
-            self.paramDict[
-                "mask_reduction_factor"] = 0.0  # mask_reduction_factors*total_pixels will be cropped on all edges of the image
+#         if "mask_reduction_factor" not in self.paramDict:
+#             self.paramDict[
+#                 "mask_reduction_factor"] = 0.0  # mask_reduction_factors*total_pixels will be cropped on all edges of the image
 
-        if "repeat_slice" not in self.paramDict:
-            self.paramDict["repeat_slice"]=1
+#         if "repeat_slice" not in self.paramDict:
+#             self.paramDict["repeat_slice"]=1
 
-        mask_red = self.paramDict["mask_reduction_factor"]
-        self.image_size=(self.paramDict["nb_total_slices"],self.image_size[0],self.image_size[1]) #for random map the image size is an input provided by the user, need to extend in z dimension
-        mask = np.zeros(self.image_size)
-        mask[:,int(self.image_size[1] * mask_red):int(self.image_size[1] * (1 - mask_red)),
-        int(self.image_size[2] * mask_red):int(self.image_size[2] * (1 - mask_red))] = 1.0
-        if not(self.paramDict["nb_empty_slices"]==0):
-            mask[:self.paramDict["nb_empty_slices"], :, :] = 0
-            mask[-self.paramDict["nb_empty_slices"]:, :, :] = 0
-        self.mask = mask
+#         mask_red = self.paramDict["mask_reduction_factor"]
+#         self.image_size=(self.paramDict["nb_total_slices"],self.image_size[0],self.image_size[1]) #for random map the image size is an input provided by the user, need to extend in z dimension
+#         mask = np.zeros(self.image_size)
+#         mask[:,int(self.image_size[1] * mask_red):int(self.image_size[1] * (1 - mask_red)),
+#         int(self.image_size[2] * mask_red):int(self.image_size[2] * (1 - mask_red))] = 1.0
+#         if not(self.paramDict["nb_empty_slices"]==0):
+#             mask[:self.paramDict["nb_empty_slices"], :, :] = 0
+#             mask[-self.paramDict["nb_empty_slices"]:, :, :] = 0
+#         self.mask = mask
 
-    @wrapper_rounding
-    def buildParamMap(self, mask=None):
+#     @wrapper_rounding
+#     def buildParamMap(self, mask=None):
 
-        # print("Building Param Map")
-        if mask is None:
-            mask = self.mask
-        else:
-            self.mask = mask
+#         # print("Building Param Map")
+#         if mask is None:
+#             mask = self.mask
+#         else:
+#             self.mask = mask
 
-        wT1 = self.dict_config["water_T1"]
-        fT1 = self.dict_config["fat_T1"]
-        wT2 = self.dict_config["water_T2"]
-        fT2 = self.dict_config["fat_T2"]
-        att = self.dict_config["B1_att"]
-        df = self.dict_config["delta_freqs"]
-        df = [- value / 1000 for value in df]
-        ff = self.dict_config["ff"]
+#         wT1 = self.dict_config["water_T1"]
+#         fT1 = self.dict_config["fat_T1"]
+#         wT2 = self.dict_config["water_T2"]
+#         fT2 = self.dict_config["fat_T2"]
+#         att = self.dict_config["B1_att"]
+#         df = self.dict_config["delta_freqs"]
+#         df = [- value / 1000 for value in df]
+#         ff = self.dict_config["ff"]
 
-        nb_slices=self.paramDict["nb_slices"]
-        if not(self.paramDict["nb_empty_slices"]==0):
-            mask_without_empty_slices=self.mask[self.paramDict["nb_empty_slices"]:-self.paramDict["nb_empty_slices"],:,:]
-        else:
-            mask_without_empty_slices=self.mask
+#         nb_slices=self.paramDict["nb_slices"]
+#         if not(self.paramDict["nb_empty_slices"]==0):
+#             mask_without_empty_slices=self.mask[self.paramDict["nb_empty_slices"]:-self.paramDict["nb_empty_slices"],:,:]
+#         else:
+#             mask_without_empty_slices=self.mask
 
-        sliced_image_size=(self.image_size[1],self.image_size[2])
+#         sliced_image_size=(self.image_size[1],self.image_size[2])
 
-        map_all=np.zeros(self.image_size+(7,))
+#         map_all=np.zeros(self.image_size+(7,))
 
-        repeat_slice = self.paramDict["repeat_slice"]
-        params_slices_count = int(nb_slices/repeat_slice)
+#         repeat_slice = self.paramDict["repeat_slice"]
+#         params_slices_count = int(nb_slices/repeat_slice)
 
-        for j in range(params_slices_count):
-            sliced_mask = mask_without_empty_slices[j,:,:]
-            map_wT1 = create_random_map(wT1, self.region_size, sliced_image_size, sliced_mask)
-            map_wT2 = create_random_map([wT2], self.region_size, sliced_image_size, sliced_mask)
-            map_fT1 = create_random_map(fT1, self.region_size, sliced_image_size, sliced_mask)
-            map_fT2 = create_random_map([fT2], self.region_size, sliced_image_size, sliced_mask)
-            map_attB1 = create_random_map(att, self.region_size, sliced_image_size, sliced_mask)
-            map_df = create_random_map(df, self.region_size, sliced_image_size, sliced_mask)
-            map_ff = create_random_map(ff, self.region_size, sliced_image_size, sliced_mask)
+#         for j in range(params_slices_count):
+#             sliced_mask = mask_without_empty_slices[j,:,:]
+#             map_wT1 = create_random_map(wT1, self.region_size, sliced_image_size, sliced_mask)
+#             map_wT2 = create_random_map([wT2], self.region_size, sliced_image_size, sliced_mask)
+#             map_fT1 = create_random_map(fT1, self.region_size, sliced_image_size, sliced_mask)
+#             map_fT2 = create_random_map([fT2], self.region_size, sliced_image_size, sliced_mask)
+#             map_attB1 = create_random_map(att, self.region_size, sliced_image_size, sliced_mask)
+#             map_df = create_random_map(df, self.region_size, sliced_image_size, sliced_mask)
+#             map_ff = create_random_map(ff, self.region_size, sliced_image_size, sliced_mask)
 
-            j_current = j*repeat_slice+self.paramDict["nb_empty_slices"]
-            j_next = np.minimum((j+1)*repeat_slice,nb_slices)+self.paramDict["nb_empty_slices"]
+#             j_current = j*repeat_slice+self.paramDict["nb_empty_slices"]
+#             j_next = np.minimum((j+1)*repeat_slice,nb_slices)+self.paramDict["nb_empty_slices"]
 
-            nb_repeat_current = j_next-j_current
+#             nb_repeat_current = j_next-j_current
 
-            slices_value = np.stack((map_wT1, map_wT2, map_fT1, map_fT2, map_attB1, map_df, map_ff), axis=-1)
+#             slices_value = np.stack((map_wT1, map_wT2, map_fT1, map_fT2, map_attB1, map_df, map_ff), axis=-1)
 
-            map_all[j_current:j_next,:,:,:] = np.resize(slices_value,(nb_repeat_current,)+slices_value.shape)
+#             map_all[j_current:j_next,:,:,:] = np.resize(slices_value,(nb_repeat_current,)+slices_value.shape)
 
-        map_all_on_mask = map_all[mask > 0]
+#         map_all_on_mask = map_all[mask > 0]
 
-        self.paramMap = {
-            "wT1": map_all_on_mask[:, 0],
-            "wT2": map_all_on_mask[:, 1],
-            "fT1": map_all_on_mask[:, 2],
-            "fT2": map_all_on_mask[:, 3],
-            "attB1": map_all_on_mask[:, 4],
-            "df": map_all_on_mask[:, 5],
-            "ff": map_all_on_mask[:, 6]
+#         self.paramMap = {
+#             "wT1": map_all_on_mask[:, 0],
+#             "wT2": map_all_on_mask[:, 1],
+#             "fT1": map_all_on_mask[:, 2],
+#             "fT2": map_all_on_mask[:, 3],
+#             "attB1": map_all_on_mask[:, 4],
+#             "df": map_all_on_mask[:, 5],
+#             "ff": map_all_on_mask[:, 6]
 
-        }
+#         }
 
-    def buildROImask(self):
+#     def buildROImask(self):
 
-        mask=self.mask
+#         mask=self.mask
 
-        nb_slices = self.paramDict["nb_slices"]
+#         nb_slices = self.paramDict["nb_slices"]
 
-        mask_red=self.paramDict["mask_reduction_factor"]
-        sliced_image_size = (self.image_size[1], self.image_size[2])
-        repeat_slice = self.paramDict["repeat_slice"]
-        params_slices_count = int(nb_slices / repeat_slice)
-        num_regions_shape=(int(sliced_image_size[0]*(1-2*mask_red) / self.region_size), int(sliced_image_size[1]*((1-2*mask_red)) / self.region_size))
-        count_regions_per_slice=np.prod(num_regions_shape)
+#         mask_red=self.paramDict["mask_reduction_factor"]
+#         sliced_image_size = (self.image_size[1], self.image_size[2])
+#         repeat_slice = self.paramDict["repeat_slice"]
+#         params_slices_count = int(nb_slices / repeat_slice)
+#         num_regions_shape=(int(sliced_image_size[0]*(1-2*mask_red) / self.region_size), int(sliced_image_size[1]*((1-2*mask_red)) / self.region_size))
+#         count_regions_per_slice=np.prod(num_regions_shape)
 
-        roi_all_slices = np.zeros(self.image_size)
+#         roi_all_slices = np.zeros(self.image_size)
 
-        current_roi_num=1
-        for j in range(params_slices_count):
-            rois=np.arange(current_roi_num,current_roi_num+count_regions_per_slice).reshape(num_regions_shape)
-            rois=np.repeat(np.repeat(rois, self.region_size, axis=1), self.region_size, axis=0).flatten()
-            #map = create_map(rois, self.region_size, sliced_mask)
+#         current_roi_num=1
+#         for j in range(params_slices_count):
+#             rois=np.arange(current_roi_num,current_roi_num+count_regions_per_slice).reshape(num_regions_shape)
+#             rois=np.repeat(np.repeat(rois, self.region_size, axis=1), self.region_size, axis=0).flatten()
+#             #map = create_map(rois, self.region_size, sliced_mask)
 
-            j_current = j * repeat_slice + self.paramDict["nb_empty_slices"]
-            j_next = np.minimum((j + 1) * repeat_slice, nb_slices) + self.paramDict["nb_empty_slices"]
-            rois_volume = makevol(rois, mask[j_current] > 0)
+#             j_current = j * repeat_slice + self.paramDict["nb_empty_slices"]
+#             j_next = np.minimum((j + 1) * repeat_slice, nb_slices) + self.paramDict["nb_empty_slices"]
+#             rois_volume = makevol(rois, mask[j_current] > 0)
 
-            nb_repeat_current = j_next - j_current
-            slices_value = rois_volume
+#             nb_repeat_current = j_next - j_current
+#             slices_value = rois_volume
 
-            roi_all_slices[j_current:j_next, :, :] = np.resize(slices_value, (nb_repeat_current,) + slices_value.shape)
+#             roi_all_slices[j_current:j_next, :, :] = np.resize(slices_value, (nb_repeat_current,) + slices_value.shape)
 
-            current_roi_num+=count_regions_per_slice
+#             current_roi_num+=count_regions_per_slice
 
-        return roi_all_slices[mask > 0]
+#         return roi_all_slices[mask > 0]
 
 
 
