@@ -23,7 +23,8 @@ if __name__ == '__main__':
              "build_masks":build_masks,
              "build_masks_singular":build_mask_from_singular_volume,
              "build_maps":build_maps,
-             "generate_dico":generate_dictionaries
+             "generate_dico":generate_dictionaries,
+             "generate_ice_dico":generate_ice_dictionary
              }
 
     parser = argparse.ArgumentParser()
@@ -84,6 +85,11 @@ if __name__ == '__main__':
     parser_dico.add_argument('--isbuildphi', type=bool,nargs='?', const=False, default=False) 
     parser_dico.add_argument('--force', type=bool,nargs='?', const=False, default=False) 
     parser_dico.add_argument('--pca', type=int,nargs='?', const=6, default=6)
+
+
+    parser_ice_dico = subparsers.add_parser('generate_ice_dico')
+    parser_ice_dico.add_argument('--dicofullfile', type=str, default=None)
+    parser_ice_dico.add_argument('--pca', type=int,nargs='?', const=10, default=10)
     
     
     args = parser.parse_args()
@@ -335,6 +341,17 @@ if __name__ == '__main__':
         dictdir.mkdir(parents=True, exist_ok=True)
 
         generate_dictionaries(sequence_file,reco,min_TR_delay,dictconf,dictconf_light,TI=8.32, dest=dictdir,is_build_phi=is_build_phi,L0=L0)
+
+
+    elif args.command=="generate_ice_dico":
+        dicofull_file = args.dicofullfile
+        if dicofull_file is None:
+            raise ValueError("No dictionary file provided. Please provide a dictionary file to generate the ICE dictionary.")
+        pca=int(args.pca)
+        generate_ice_dictionary(dicofull_file,threshold_pca=pca)
+        
+
+    
 
     else:
         raise("Value Error : Unknown Function")

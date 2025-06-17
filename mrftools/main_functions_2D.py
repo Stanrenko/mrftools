@@ -3,6 +3,7 @@ import finufft
 import SimpleITK as sitk
 import json
 import pathlib
+import struct
 
 from .utils_mrf import *
 from .utils_simu import *
@@ -446,4 +447,190 @@ def generate_dictionaries(sequence_file,reco,min_TR_delay,dictconf,dictconf_ligh
     print("Generated dictionary {}".format(dico_full_name))
 
     return
+
+
+
+def generate_ice_dictionary(dicofull_file,threshold_pca=10):
+    '''
+    Generates ICE dictionary from sequence and dico configuration files
+    inputs:
+    dico_full_with_hdr - .pkl file containing dictionaries and headers
+    threshold_pca - threshold for PCA (int)
+    outputs:
+    .bin file for ICE reconstruction
+    '''
+
+    with open(dicofull_file, "rb") as file:
+        dico_full_with_hdr = pickle.load(file)
+
+    mrfdict_light = dico_full_with_hdr["mrfdict_light"]
+    dico_pca_light,dico_vars_light= get_pca_basis(mrfdict_light, threshold_pca=threshold_pca)
+
+    keys_pca= list(dico_pca_light.keys())
+    keys_var=list(dico_vars_light.keys())
+
+    for k in keys_pca:
+        dico_pca_light[k+"_LIGHT"]=dico_pca_light.pop(k)
+
+    for k in keys_var: 
+        dico_vars_light[k+"_LIGHT"]=dico_vars_light.pop(k)
+
+
+    mrfdict= dico_full_with_hdr["mrfdict"]
+    dico_pca,dico_vars= get_pca_basis(mrfdict, threshold_pca=threshold_pca)
+
+    dico_vars.update(dico_vars_light)
+    dico_pca.update(dico_pca_light)
+
+
+    filename_bin=str.split(dicofull_file,".pkl")[0]+"_{}pca.bin".format(threshold_pca)
+
+    convert_pca_basis_to_binary(dico_pca, dico_vars, filename_bin)
+    print("Generated ICE dictionary {}".format(filename_bin))
+    
+    return
+
+
+def get_pca_basis(mrfdict, threshold_pca=10):
+    '''
+    Generates PCA basis from the dictionary
+    inputs:
+    mrfdict - dictionary containing MRF parameters
+    threshold_pca - threshold for PCA (int)
+    
+    outputs:
+    phi - numpy array containing PCA basis
+    '''
+
+    keys = mrfdict.keys
+    array_water = mrfdict.values[:, :, 0]
+    array_fat = mrfdict.values[:, :, 1]
+
+    array_water_unique, index_water_unique = np.unique(array_water, axis=0, return_inverse=True)
+    array_fat_unique, index_fat_unique = np.unique(array_fat, axis=0, return_inverse=True)
+
+    pca_water = PCAComplex(n_components_=threshold_pca)
+    pca_fat = PCAComplex(n_components_=threshold_pca)
+
+    pca_water.fit(array_water_unique)
+    pca_fat.fit(array_fat_unique)
+
+    transformed_array_water_unique = pca_water.transform(array_water_unique)
+    transformed_array_fat_unique = pca_fat.transform(array_fat_unique)
+
+    dico_pca={"PCA_FAT":pca_fat.components_,"PCA_WATER":pca_water.components_,"TRANSF_FAT":transformed_array_fat_unique,"TRANSF_WATER":transformed_array_water_unique}
+
+
+    var_w = np.sum(array_water_unique * array_water_unique.conj(), axis=1).real
+    var_f = np.sum(array_fat_unique * array_fat_unique.conj(), axis=1).real
+    sig_wf = np.sum(array_water_unique[index_water_unique] * array_fat_unique[index_fat_unique].conj(),
+                            axis=1).real
+
+    var_w = var_w[index_water_unique]
+    var_f = var_f[index_fat_unique]
+
+    var_w = np.reshape(var_w, (-1, 1))
+    var_f = np.reshape(var_f, (-1, 1))
+    sig_wf = np.reshape(sig_wf, (-1, 1))
+    
+    
+    dico_vars={"VAR_W":var_w,"VAR_F":var_f,"SIG_WF":sig_wf,"INDEX_WATER":index_water_unique,"INDEX_FAT":index_fat_unique,"KEYS":np.array(keys)}
+
+    return dico_pca,dico_vars
+
+def convert_pca_basis_to_binary(dico_pca, dico_vars, filename_bin):
+    '''
+    Converts PCA basis to binary file
+    inputs:
+    dico_pca - dictionary containing PCA basis
+    dico_vars - dictionary containing variance and covariance
+    filename_bin - output filename (.bin)
+    
+    outputs:
+    .bin file containing PCA basis
+    '''
+    
+    mat1 = dico_pca
+    # print(mat1)
+    h1_keys = set(mat1.keys())
+
+    # Load second file
+    mat2 = dico_vars
+    mat2.update(mat1)
+    h2_keys = set(mat2.keys())
+
+    # Determine newly introduced variables (excluding MATLAB defaults)
+    # excluded_keys = h1_keys.union({'__header__', '__version__', '__globals__'})
+    # new_keys = [k for k in h2_keys if k not in excluded_keys]
+    new_keys=h2_keys
+    with open(filename_bin, 'wb') as f:
+    # Number of new variables
+        f.write(struct.pack('q', len(new_keys)))
+
+        for key in new_keys:
+            data = mat2[key]
+
+            is_complex = np.iscomplexobj(data)
+            dtype_str = data.dtype.name
+
+            if dtype_str=="float64" or is_complex:
+                dtype_str="double"
+
+            # Write variable name     
+            f.write(struct.pack('q', len(key)))
+            f.write(key.encode('utf-8'))
+
+            # Write data type
+            f.write(struct.pack('q', len(dtype_str)))
+            f.write(dtype_str.encode('utf-8'))
+
+            # Write dimensions
+            shape = data.shape
+            dim = len(shape)
+            f.write(struct.pack('q', dim))
+            f.write(struct.pack('q', int(is_complex)))
+            f.write(struct.pack(f'{dim}q', *shape))
+
+            # Flatten and write data
+            if is_complex:
+                flat_data = np.row_stack((data.real.ravel(order="F"), data.imag.ravel(order="F"))).ravel(order="F")
+            else:
+                flat_data = data.ravel(order="F")
+            f.write(flat_data.astype(dtype_str).tobytes())
+
+    # with open(filename_bin, 'rb') as f:
+    #     NData = struct.unpack('q', f.read(8))[0]
+    #     print(f'NData = {NData}')
+    #     data_read = {}
+
+    #     for _ in range(NData):
+    #         name_len = struct.unpack('q', f.read(8))[0]
+    #         name = f.read(name_len).decode('utf-8')
+
+    #         dtype_len = struct.unpack('q', f.read(8))[0]
+    #         dtype = f.read(dtype_len).decode('utf-8')
+
+    #         dim = struct.unpack('q', f.read(8))[0]
+    #         is_complex = struct.unpack('q', f.read(8))[0]
+    #         shape = struct.unpack(f'{dim}q', f.read(8 * dim))
+    #         size = np.prod(shape)
+
+    #         num_elements = size * (2 if is_complex else 1)
+    #         dt = np.dtype(dtype)
+    #         buffer = f.read(num_elements * dt.itemsize)
+    #         arr = np.frombuffer(buffer, dtype=dt)
+
+    #         if is_complex:
+    #             arr = arr.reshape(-1, 2)
+    #             arr = arr[:, 0] + 1j * arr[:, 1]
+
+    #         data_read[name] = arr.reshape(shape)
+
+    # for key in new_keys:
+    #     orig = mat2[key]
+    #     loaded = data_read[key]
+    #     print(f'{key}: norm = {np.linalg.norm(orig.ravel(order="F") - loaded.ravel())}')
+
+    return
+
 
