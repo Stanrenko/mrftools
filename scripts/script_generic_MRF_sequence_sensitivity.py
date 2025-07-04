@@ -21,13 +21,18 @@ weights = np.array([
     [0.5, 0.5]   # Troisième combinaison
 ])
 
-paramSeq = cc.SEQ_CONFIG3
+paramSeq = cc.SEQ_CONFIG_pSSFP4
+paramSeq['readout'] = 'pSSFP_generic'
+
+# paramSeq = cc.SEQ_CONFIG2
+# paramSeq['readout'] = 'FLASH'
+
 paramSeq['T_recovery'] = 5000
 paramSeq['eta'] = 1
-paramSeq['readout'] = 'pSSFP_2'
 paramSeq['nrep'] = 1
 
-mrfdict,hdr,dictfile = us.generate_epg_dico_T1MRF_generic_from_sequence(paramSeq, dict_config)
+# mrfdict,hdr,dictfile = us.generate_epg_dico_T1MRF_generic_from_sequence(paramSeq, dict_config)
+mrfdict,hdr,dictfile = us.generate_epg_dico_T1MRF(paramSeq,dict_config,useGPU=True, batch_size=None, dest=None,prefix_dico="{}".format("dico"))
 
 
 
@@ -80,6 +85,7 @@ fig.legend(handles, labels, loc='upper right')
 
 # Ajustement de la mise en page
 plt.tight_layout()
-plt.savefig(f"../fig/{paramSeq['readout']}_config_{json_file}_FA{paramSeq['FA']}.png", dpi=300)
+# plt.savefig(f"../fig/{paramSeq['readout']}_config_{json_file}_FA{paramSeq['FA']}.png", dpi=300)
+plt.savefig(f"/mnt/rmn_files/0_Wip/New/1_Methodological_Developments/1_Methodologie_3T/&3_2017_Fingerprinting_FF_T1/2_Codes_Info/python/mrf_dev/fig/{paramSeq['readout']}4_config_{json_file}_FA{paramSeq['FA']}.png", dpi=300)
 plt.show()
 plt.close()

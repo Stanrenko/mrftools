@@ -1142,10 +1142,14 @@ class SimpleDictSearch(Optimizer):
 
         del volumes
 
-        with open(dicofull_file, "rb") as file:
+        if os.path.isfile(dicofull_file):
+            with open(dicofull_file, "rb") as file:
                 dicofull = pickle.load(file)
-
-
+        elif type(dicofull_file) == dict:        
+            dicofull = dicofull_file
+        else:
+            raise ValueError("dicofull_file should be a path to a existing dictionary or a dictionary")  
+        
         if "param_names" in dicofull["hdr"].keys():
             param_names=dicofull["hdr"]["param_names"]
 
@@ -2528,8 +2532,10 @@ def prox_LLR(volumes, threshold, blck, strd):
 def add_temporal_basis(dico,L0=None):
     if "phi" not in dico.keys():
         print("Building temporal basis from dictionary")
-        mrfdict=dico["mrfdict"]
-        phi=build_phi(mrfdict)
+        # mrfdict=dico["mrfdict"]
+        mrfdict=dico["mrfdict_light"]
+        # phi=build_phi(mrfdict)
+        phi=build_phi(mrfdict, FFs=np.arange(0.1,1.09,0.15))
         dico["phi"]=phi
 
     if (L0 is not None)and(("mrfdict_light_L0{}".format(L0) not in dico.keys())or("mrfdict_L0{}".format(L0) not in dico.keys())):

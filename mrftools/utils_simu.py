@@ -41,6 +41,9 @@ class T1MRF_generic:
         elif SEQ_CONFIG['readout'] == 'pSSFP': 
             self.spl = epg.S(1)
             self.PHI = [1 * i * (i + 1) / 2 for i in range(len(self.TE))]
+        elif SEQ_CONFIG['readout'] == 'pSSFP_generic': 
+            self.spl = epg.S(1)
+            self.PHI = [SEQ_CONFIG['PHI'][i] * i * (i + 1) / 2 for i in range(len(self.TE))]
         elif SEQ_CONFIG['readout'] == 'pSSFP_2': 
             self.spl = epg.S(1)
             self.PHI = np.array([1 * i * (i + 1) / 2 for i in range(int(np.round(len(self.TE)/2)))] + [(-1) * i * (i + 1) / 2 for i in range(int(np.round(len(self.TE)/2)))])            
@@ -141,7 +144,10 @@ def t1_mfr_seq(SEQ_CONFIG):
         PHI = [1 * i * (i + 1) / 2 for i in range(len(TE))]
     elif SEQ_CONFIG['readout'] == 'pSSFP_2': 
         spl = operators.S(1)
-        PHI = np.array([1 * i * (i + 1) / 2 for i in range(int(np.round(len(TE)/2)))] + [(-1) * i * (i + 1) / 2 for i in range(int(np.round(len(TE)/2)))])            
+        PHI = np.array([1 * i * (i + 1) / 2 for i in range(int(np.round(len(TE)/2)))] + [(-1) * i * (i + 1) / 2 for i in range(int(np.round(len(TE)/2)))])
+    elif SEQ_CONFIG['readout'] == 'pSSFP_generic': 
+        spl = operators.S(1)
+        PHI = [SEQ_CONFIG['PHI'][i] * i * (i + 1) / 2 for i in range(len(TE))]
     elif SEQ_CONFIG['readout'] == 'TrueFISP':
         spl = operators.NULL
         PHI = np.array([0, 180] * (len(TE) // 2) + [0] * (len(TE) % 2)) 
@@ -851,3 +857,62 @@ def convert_ndarray_to_list(d):
         elif isinstance(value, list):  # Pour les listes de listes ou d'autres types
             d[key] = [v.tolist() if isinstance(v, np.ndarray) else v for v in value]
     return d 
+
+def generate_hs_rf_pta(duration_ms=12, dt_us=4, beta=8, mu=6, n=8, b1_max=1.0):
+    """
+    Génère un fichier PTA pour une séquence RF HSn avec les paramètres spécifiés.
+    Le fichier est enregistré sous le nom "hs8_rf.pta".
+    """
+
+    # === PARAMETERS ===
+    # duration_ms: total duration (ms)
+    # dt_us: Raster time (µs)
+    # beta: β parameter(amplitude)
+    # mu: μ parameter (phase)
+    # n: HSn order
+    # b1_max: B1 max (for normalization)
+
+    duration_s = duration_ms * 1e-3
+    dt_s = dt_us * 1e-6
+    n_points = int(duration_s / dt_s)
+    t = np.linspace(-duration_s/2, duration_s/2, n_points)
+
+    # Enveloppe amplitude and phase
+    amp = (1 / np.cosh(beta * t)) ** n
+    phase = mu * np.log(np.tanh(beta * t / 2 + 1e-12))  # 1e-12 pour éviter log(0)
+
+    # Complex RF
+    rf = amp * np.exp(1j * phase)
+
+    # Normalization (optional)
+    rf = rf / np.max(np.abs(rf)) * b1_max
+
+    # === PTA FILE WRITING ===
+    filename = f"hs{n}_rf.pta"
+    with open(filename, "w") as f:
+        f.write("[Shape]\n")
+        f.write("TYPE=COMPLEX\n")
+        f.write(f"LENGTH={n_points}\n")
+        f.write(f"STEP={dt_us}\n")
+        f.write("VERSION=1\n")
+        f.write("DATA\n")
+        for c in rf:
+            f.write(f"{c.real:.6f} {c.imag:.6f}\n")
+
+    print(f"PTA file written: {filename} ({n_points} points, {duration_ms} ms)")
+
+def export_arbitrary_sequence(sequence, filename):
+    """
+    Export a sequence of values to a text file in a specific format.
+
+    Parameters:
+    - sequence: list or numpy array of numerical values
+    - filename: name of the output file (with extension)
+    """
+    with open(filename, 'w') as f:
+        f.write(f"# Number of fingerprinting points = {len(sequence)}\n\n\n")
+        f.write(f"# max value = {max(sequence)}\n\n\n")
+        f.write(f"# min value = {min(sequence)}\n\n\n")
+
+        for value in sequence:
+            f.write(f"{value}\n")
