@@ -11,9 +11,10 @@ except:
 from scipy import ndimage
 
 import epgpy as epg
+epg.set_array_module('numpy')
 import pandas as pd
 # from mrftools.utils_mrf import create_random_map,voronoi_volumes,normalize_image_series,build_mask_from_volume,generate_kdata,build_mask_single_image,buildROImask,correct_mvt_kdata,create_map
-from mutools.optim.dictsearch import dictmodel
+from .dictmodel import *
 
 from mrftools.utils_mrf import makevol
 import itertools
