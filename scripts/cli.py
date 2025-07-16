@@ -294,9 +294,17 @@ if __name__ == '__main__':
         
         # dictfile_light=dico_full_with_hdr["dictfile_light"]
         dico_hdr=dico_full_with_hdr["hdr"]
-        
+        clustering_windows={
+            "wT1":600,
+            "fT1":100,
+            "df":0.03,
+            "attB1":0.25
+        }
+
+        print("Clustering  windows : {}".format(clustering_windows))
+
         check_dico(dico_hdr,file_seq)
-        all_maps=build_maps(volumes,masks,dictfiles,split=split,pca=pca,useGPU=useGPU,return_cost=return_cost,volumes_type=volumes_type)
+        all_maps=build_maps(volumes,masks,dictfiles,split=split,pca=pca,useGPU=useGPU,return_cost=return_cost,volumes_type=volumes_type,clustering_windows=clustering_windows)
         save_maps(all_maps,file_seq)
 
     elif args.command=="generate_dico":
