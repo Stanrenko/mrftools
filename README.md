@@ -13,7 +13,7 @@ Bicomponent dictionary matching for fast reconstruction of quantitative maps fro
 
 After cloning the repository, one should create the environment with the dependencies by running the shell script:
 ```
-sh install_mrftools.sh <env>
+pip install -e . <env>
 conda activate <env>
 ```
 
