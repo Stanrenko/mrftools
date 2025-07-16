@@ -290,7 +290,7 @@ class ImageSeries(object):
 
         self.cached_images_series=images_series
 
-    def build_ref_images_v2(self,seq, useGPU=True, phase=None):
+    def build_ref_images_v2(self,seq, useGPU=True, phase=None,epg_opt = {"disp": True, 'max_nstate':30}):
 
         # mask_np = np.asarray(maps["mask"])
         # idx = np.where(mask_np > 0)
@@ -309,7 +309,7 @@ class ImageSeries(object):
             epg.set_array_module('cupy')
         else:
             epg.set_array_module('numpy')
-        epg_opt = {"disp": True, 'max_nstate':30}
+        # epg_opt = {"disp": True, 'max_nstate':30}
             
         # TR_delay=sequence_config["dTR"]
 
