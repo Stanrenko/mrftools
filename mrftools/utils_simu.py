@@ -236,9 +236,6 @@ def create_new_seq(FA_list,TE_list,min_TR_delay,TI,FA_factor=5):
     seq_config_new["TE"] = list(np.array(TE_list[1:]) * 10 ** 3)
     seq_config_new["TR"] = list((np.array(TE_list[1:])+min_TR_delay) * 10 ** 3)
     seq_config_new["B1"] = list(np.array(FA_list[1:]) * 180 / np.pi / 5)
-    
-    
-    
 
     return seq_config_new
 
@@ -619,24 +616,6 @@ def load_sequence_file(fileseq,recovery,min_TR_delay):
     FA_list = [np.pi] + list(np.array(B1) * FA * np.pi / 180)
     return TR_list,FA_list,TE_list
 
-# def generate_dictionaries(sequence_file,reco,min_TR_delay,dictconf,dictconf_light,TI=8.32):
-
-#     _,FA_list,TE_list=load_sequence_file(sequence_file,reco,min_TR_delay/1000)
-#     seq_config=create_new_seq(FA_list,TE_list,min_TR_delay,TI)
-
-#     dictfile,hdr=generate_epg_dico_T1MRFSS_from_sequence(seq_config,dictconf,FA_list,TE_list,reco,min_TR_delay/1000,TI=TI)
-#     dictfile_light,hdr_light=generate_epg_dico_T1MRFSS_from_sequence(seq_config,dictconf_light,FA_list,TE_list,reco,min_TR_delay/1000,TI=TI)
-
-#     dico_full_with_hdr={"hdr":hdr,
-#                         "hdr_light":hdr_light,
-#                         "dictfile":dictfile,
-#                         "dictfile_light":dictfile_light}
-    
-#     dico_full_name=str.split(dictfile,".dict")[0]+".pkl"
-#     with open(dico_full_name,"wb") as file:
-#         pickle.dumps(dico_full_with_hdr)
-
-#     return
 
 def generate_ImgSeries_T1MRF_generic(sequence_config,dict_config, maps, useGPU=True, sim_mode="mean",start=None,window=None):
 

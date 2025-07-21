@@ -34,7 +34,7 @@ def extract_data(filename,dens_adj=True):
     print(dico_seqParams)
 
     return data,dico_seqParams
-    
+
 
 
 def calculate_sensitivity_map(kdata,res=16,hanning_filter=True,density_adj=False):
@@ -318,12 +318,10 @@ def build_maps(volumes_all_slices,masks_all_slices,dico_full_file,useGPU=True,sp
     volumes_all_slices - time serie of undersampled volumes size ntimesteps x nb_slices x npoint/2 x npoint/2 (numpy array)
     masks_all_slices - mask of size nb_slices x npoint/2 x npoint/2 (numpy array)
     dico_full_file - light and full dictionaries with headers (.pkl)
-    file_config - optimization options
     useGPU - wheter to use GPU
     split - signal batch count for memory management (int)
     return_cost - whether to return additional maps (e.g. proton density, phase and cost)
     pca - number of temporal pca components retained (int)
-    phi - temporal basis (numpy array)
     volumes_type - "raw" or "singular" - depending on the input volumes ("raw" time serie of undersampled volumes / "singular" singular volumes)
     
 
@@ -352,48 +350,6 @@ def build_maps(volumes_all_slices,masks_all_slices,dico_full_file,useGPU=True,sp
 
     
     return all_maps
-
-# def build_maps_bak(volumes_all_slices,masks_all_slices,dico_full_file,useGPU=True,split=100,return_cost=False,pca=6,volumes_type="raw"):
-#     '''
-#     builds MRF maps using bi-component dictionary matching (Slioussarenko et al. MRM 2024)
-#     inputs:
-#     volumes_all_slices - time serie of undersampled volumes size ntimesteps x nb_slices x npoint/2 x npoint/2 (numpy array)
-#     masks_all_slices - mask of size nb_slices x npoint/2 x npoint/2 (numpy array)
-#     dico_full_file - light and full dictionaries with headers (.pkl)
-#     file_config - optimization options
-#     useGPU - wheter to use GPU
-#     split - signal batch count for memory management (int)
-#     return_cost - whether to return additional maps (e.g. proton density, phase and cost)
-#     pca - number of temporal pca components retained (int)
-#     phi - temporal basis (numpy array)
-#     volumes_type - "raw" or "singular" - depending on the input volumes ("raw" time serie of undersampled volumes / "singular" singular volumes)
-    
-
-#     outputs:
-#     all_maps: tuple containing for all iterations 
-#             (maps - dictionary with parameter maps for all keys
-#              mask - numpy array
-#              cost map (OPTIONAL)
-#              phase map - numpy array (OPTIONAL)
-#              proton density map - numpy array (OPTIONAL)
-#              matched_signals - numpy array  (OPTIONAL))
-
-#     '''
-
-#     try:
-#         import cupy
-#     except:
-#         print("Could not import cupy - not using gpu")
-#         useGPU=False
-    
-#     optimizer = SimpleDictSearch(mask=masks_all_slices, split=split, pca=True,
-#                                                 threshold_pca=pca,threshold_ff=1.1,return_cost=return_cost,useGPU_dictsearch=useGPU,volumes_type=volumes_type)
-                
-#     all_maps=optimizer.search_patterns_test_multi_2_steps_dico(dico_full_file,volumes_all_slices)
-        
-
-    
-#     return all_maps
 
 
     
@@ -431,14 +387,6 @@ def save_maps(all_maps, file_seqParams, keys = ["ff","wT1","attB1","df"], dest=N
         dico_seqParams["is3D"] = False
         path = dest
         
-        
-    # file = open(file_seqParams, "rb")
-    # dico_seqParams = pickle.load(file)
-    # file.close()
-
-    # path, _ = os.path.split(file_seqParams)
-    # print(path)
-
 
     file_map=os.path.join(path,"maps.pkl")
     with open(file_map,"wb") as file:
@@ -450,14 +398,16 @@ def save_maps(all_maps, file_seqParams, keys = ["ff","wT1","attB1","df"], dest=N
         mask = all_maps[0][1]
         map_all_slices = makevol(map_rebuilt[k], mask > 0)            
         map_all_slices,geom=convertArrayToImageHelper(dico_seqParams,map_all_slices,apply_offset=True)
-        curr_volume=sitk.GetImageFromArray(map_all_slices)
+        # curr_volume=sitk.GetImageFromArray(map_all_slices)
         
-        curr_volume.SetSpacing(geom["spacing"])
-        curr_volume.SetOrigin(geom["origin"])
+        # curr_volume.SetSpacing(geom["spacing"])
+        # curr_volume.SetOrigin(geom["origin"])
         
-        file_map=os.path.join(path,"{}_map.mha".format(k))
-        sitk.WriteImage(curr_volume,file_map,useCompression=True)
-
+        # file_map=os.path.join(path,"{}_map.mha".format(k))
+        # sitk.WriteImage(curr_volume,file_map,useCompression=True)
+        vol = io.Volume(map_all_slices, **geom)
+        io.write("{}_map.mha".format(k),vol)
+        
 
 
 
@@ -477,9 +427,7 @@ def generate_dictionaries(sequence_file,reco,min_TR_delay,dictconf,dictconf_ligh
     outputs:
     saves the dictionaries paths and headers in a .pkl file
     '''
-    # sequence_file = str(sequence_file)
-    # dictconf = str(dictconf)
-    # dictconf_light = str(dictconf_light)
+
 
     _,FA_list,TE_list=load_sequence_file(sequence_file,reco,min_TR_delay/1000)
     seq_config=create_new_seq(FA_list,TE_list,min_TR_delay/1000,TI)
@@ -520,15 +468,6 @@ def generate_dictionaries_mrf_generic(sequence_config,dictconf,dictconf_light,us
     outputs:
     saves the dictionaries paths and headers in a .pkl file
     '''
-    # sequence_file = str(sequence_file)
-    # dictconf = str(dictconf)
-    # dictconf_light = str(dictconf_light)
-
-    # _,FA_list,TE_list=load_sequence_file(sequence_file,reco,min_TR_delay/1000)
-    # seq_config=create_new_seq(FA_list,TE_list,min_TR_delay/1000,TI)
-
-    # mrfdict,hdr,dictfile=generate_epg_dico_T1MRF_generic_from_sequence(sequence_config,dictconf,dest=dest,prefix_dico="{}".format(diconame))
-    # mrfdict_light,hdr_light,dictfile_light=generate_epg_dico_T1MRF_generic_from_sequence(sequence_config,dictconf_light,dest=dest,prefix_dico="{}_light".format(diconame))
     mrfdict,hdr,dictfile=generate_epg_dico_T1MRF(sequence_config,dictconf,useGPU=useGPU, batch_size=batch_size, dest=dest,prefix_dico="{}".format(diconame))
     mrfdict_light,hdr_light,dictfile_light=generate_epg_dico_T1MRF(sequence_config,dictconf_light,useGPU=useGPU, batch_size=batch_size, dest=dest,prefix_dico="{}_light".format(diconame))
     

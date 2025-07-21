@@ -12,7 +12,7 @@ import pickle
 from mrftools import io
 import mrftools.utils_mrf as ut_mrf
 from mrftools.trajectory import Radial
-import mrftools.main_functions_2D as main
+import mrftools.utils_reco as main
 import os
 importlib.reload(main)
 import logging

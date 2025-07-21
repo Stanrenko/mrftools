@@ -7,7 +7,7 @@ import matplotlib.cm as cm
 import importlib
 importlib.reload(us)
 importlib.reload(cc)
-import mrftools.main_functions_2D as main_fun2D
+import mrftools.utils_reco as main_fun2D
 
 json_file = 'dicoT2'
 key = 'water_T2'

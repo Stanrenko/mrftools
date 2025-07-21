@@ -4,7 +4,7 @@ from PIL import Image
 import numpy as np
 import pathlib
 from mrftools.config import DICT_CONFIG,DICT_LIGHT_CONFIG,SEQ_CONFIG
-from mrftools.main_functions_2D import *
+from mrftools.utils_reco import *
 
 
 ROOT = pathlib.Path(__file__).parent.parent
