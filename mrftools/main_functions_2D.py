@@ -637,11 +637,11 @@ def convert_pca_basis_to_binary(dico_pca, dico_vars, filename_bin):
     return
 
 
-def denoise(data,h=-1,volscaling=10):
+def denoise(data,h=-1,volscaling=10,search_radius=11,patch_radius=7):
     if h==-1:
         vol=estimate_sigma(data,multichannel=False)
         filteringParam=volscaling*vol
     else:
         filteringParam=h
 
-    return denoise_nl_means(data,h=filteringParam,fast_mode=True,preserve_range=True)
+    return denoise_nl_means(data,h=filteringParam,fast_mode=True,preserve_range=True,patch_size=patch_radius,patch_distance=search_radius)
