@@ -1389,10 +1389,12 @@ def build_dico_seqParams(filename,index=-1):
     adFree = get_specials(hdr, type="adFree",index=index)
     geometry, is3D, orientation, offset = get_volume_geometry(hdr,index=index)
     
+    print(alFree)
+
     protocol=hdr[index]["tProtocolName"]
     print(protocol)
     
-    if (protocol=="T1_mapping")or("raFin_1400Seg_1400Interleaved" in protocol)or("T1MAP" in protocol)or("customIR_Reco" in protocol)or("T1_MAP" in protocol):
+    if (protocol=="T1_mapping")or("raFin_1400Seg_1400Interleaved" in protocol)or("T1MAP" in protocol)or("customIR_Reco" in protocol)or("T1_MAP" in protocol)or("MRF2D" in protocol):
         nb_segments=alFree[3]
     else:
         nb_segments=alFree[4]
