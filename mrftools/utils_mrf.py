@@ -1389,8 +1389,6 @@ def build_dico_seqParams(filename,index=-1):
     adFree = get_specials(hdr, type="adFree",index=index)
     geometry, is3D, orientation, offset = get_volume_geometry(hdr,index=index)
     
-    print(alFree)
-
     protocol=hdr[index]["tProtocolName"]
     print(protocol)
     
@@ -1438,9 +1436,7 @@ def build_dico_seqParams(filename,index=-1):
         
         dico_seqParams = {"alFree": alFree, "x_FOV": x_FOV, "y_FOV": y_FOV,"TI":invTime,"total_TR":total_TR,"dTR":dTR,"offset": offset,"is3D": is3D, "orientation": orientation,"nb_segments":nb_segments}
         dico_seqParams.update(geometry)
-    
-    print(dico_seqParams)
-    
+
     return dico_seqParams
 
 
@@ -1585,7 +1581,7 @@ def read_rawdata_2D(filename):
     dico_seqParams=build_dico_seqParams(filename)
     nb_segments=dico_seqParams["nb_segments"]
 
-    twix = twixtools.read_twix(filename)
+    twix = twixtools.read_twix(filename,parse_pmu=False)
     mdb_list = twix[-1]['mdb']
     data= []
     for i, mdb in enumerate(mdb_list):
