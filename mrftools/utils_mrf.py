@@ -1438,7 +1438,9 @@ def build_dico_seqParams(filename,index=-1):
         
         dico_seqParams = {"alFree": alFree, "x_FOV": x_FOV, "y_FOV": y_FOV,"TI":invTime,"total_TR":total_TR,"dTR":dTR,"offset": offset,"is3D": is3D, "orientation": orientation,"nb_segments":nb_segments}
         dico_seqParams.update(geometry)
-        
+    
+    print(dico_seqParams)
+    
     return dico_seqParams
 
 
