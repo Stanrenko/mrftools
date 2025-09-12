@@ -1591,10 +1591,10 @@ def has_volume_geometry(header):
     return all(field in header for field in fields)
 
 def read_rawdata_2D(filename):
-    dico_seqParams=build_dico_seqParams(filename,parse_pmu=False)
+    dico_seqParams=build_dico_seqParams(filename)
     nb_segments=dico_seqParams["nb_segments"]
 
-    twix = twixtools.read_twix(filename)
+    twix = twixtools.read_twix(filename,parse_pmu=False)
     mdb_list = twix[-1]['mdb']
     data= []
     for i, mdb in enumerate(mdb_list):
