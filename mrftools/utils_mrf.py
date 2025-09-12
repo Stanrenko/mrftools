@@ -1744,10 +1744,10 @@ def simulate_radial_undersampled_images_multi(kdata, trajectory, size, density_a
                     images_series_rebuilt[i]=np.abs(fk)
             else:
                 print("Using b1")
-                curr_image=np.sum(b1.conj() * fk, axis=0)
-                if curr_image.ndim < images_series_rebuilt[i].ndim:
-                    curr_image=np.expand_dims(curr_image,axis=0)
-                images_series_rebuilt[i] = np.sum(b1.conj() * fk, axis=0)
+                # curr_image=np.sum(b1.conj() * fk, axis=0)
+                # if curr_image.ndim < images_series_rebuilt[i].ndim:
+                #     curr_image=np.expand_dims(curr_image,axis=0)
+                images_series_rebuilt[i] = np.sum(b1.conj().squeeze() * fk, axis=0)
 
     elif traj[0].shape[-1] == 3:  # 3D
         if not (useGPU):
