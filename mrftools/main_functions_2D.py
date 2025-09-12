@@ -266,6 +266,8 @@ def build_masks(kdata,b1_all_slices,threshold_factor=1/25):
 
     masks_all_slices=np.array(masks_all_slices)
 
+    print(masks_all_slices.shape)
+
     return(masks_all_slices)
 
 def build_mask_from_singular_volume(volumes,l=0,threshold=0.03,it=1):

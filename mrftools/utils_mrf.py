@@ -1636,11 +1636,11 @@ def simulate_radial_undersampled_images_multi(kdata, trajectory, size, density_a
     traj = trajectory.get_traj_for_reconstruction(ntimesteps)
 
     nb_channels = len(kdata)
-
+    print(kdata.shape)
     if not (len(kdata[0]) == len(traj)):
         kdata = kdata.reshape(nb_channels, len(traj), -1)
     
-
+    print(kdata.shape)
     #print(traj[0].shape)
     npoint = trajectory.paramDict["npoint"]
     nb_allspokes = trajectory.paramDict["total_nspokes"]
@@ -2031,6 +2031,7 @@ def build_mask_single_image_multichannel(kdata,trajectory,image_size,b1=None,den
     else:
         trajectory_for_mask = trajectory
 
+    print("Building image for mask")
     if (selected_spokes is not None):
         volume_rebuilt = build_single_image_multichannel(kdata[:,selected_spokes,:,:],trajectory_for_mask,image_size,density_adj,eps,b1,useGPU=useGPU,light_memory_usage=light_memory_usage,is_theta_z_adjusted=is_theta_z_adjusted,normalize_volumes=normalize_volumes)
     else:
