@@ -1725,8 +1725,8 @@ def simulate_radial_undersampled_images_multi(kdata, trajectory, size, density_a
     if traj[0].shape[-1] == 2:  # 2D
         
         print(kdata.shape)
-        for i, t in tqdm(enumerate(traj.squeeze())):
-            fk = finufft.nufft2d1(asca(t[:, 0]), asca(t[:, 1]), asca(np.squeeze(kdata[:, i, :])), size)
+        for i, t in tqdm(enumerate(traj)):
+            fk = finufft.nufft2d1(asca(t[:, 0].squeeze()), asca(t[:, 1].squeeze()), asca(np.squeeze(kdata[:, i, :])), size)
 
             # images_series_rebuilt = np.moveaxis(images_series_rebuilt, 0, 1)
             if b1 is None:
