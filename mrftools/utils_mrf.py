@@ -1639,7 +1639,7 @@ def simulate_radial_undersampled_images_multi(kdata, trajectory, size, density_a
 
     if not (len(kdata[0]) == len(traj)):
         kdata = kdata.reshape(nb_channels, len(traj), -1)
-
+    
 
     #print(traj[0].shape)
     npoint = trajectory.paramDict["npoint"]
@@ -1708,6 +1708,8 @@ def simulate_radial_undersampled_images_multi(kdata, trajectory, size, density_a
 
     output_shape = (ntimesteps,) + size
 
+    print(output_shape)
+
     flushed = False
 
     if memmap_file is not None:
@@ -1721,7 +1723,8 @@ def simulate_radial_undersampled_images_multi(kdata, trajectory, size, density_a
 
     print("Performing NUFFT")
     if traj[0].shape[-1] == 2:  # 2D
-
+        
+        print(kdata.shape)
         for i, t in tqdm(enumerate(traj)):
             fk = finufft.nufft2d1(asca(t[:, 0]), asca(t[:, 1]), asca(np.squeeze(kdata[:, i, :])), size)
 

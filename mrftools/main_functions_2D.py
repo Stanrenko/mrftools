@@ -257,7 +257,7 @@ def build_masks(kdata,b1_all_slices,threshold_factor=1/25):
 
     nb_slices,nb_channels,nb_allspokes,npoint=kdata.shape
     image_size=(int(npoint/2),int(npoint/2))
-
+    print(kdata.shape)
     radial_traj=Radial(total_nspokes=nb_allspokes,npoint=npoint)
     masks_all_slices=[]
     for sl in range(0,nb_slices):
