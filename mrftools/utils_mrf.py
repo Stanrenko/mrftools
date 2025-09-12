@@ -1726,14 +1726,14 @@ def simulate_radial_undersampled_images_multi(kdata, trajectory, size, density_a
         
         print(kdata.shape)
         for i, t in tqdm(enumerate(traj)):
-            # print("traj shape {}".format(t.shape))
-            # print("kdata shape {}".format(kdata[:, i, :].shape))
+            print("traj shape {}".format(t.shape))
+            print("kdata shape {}".format(kdata[:, i, :].shape))
             fk = finufft.nufft2d1(asca(t[:, 0]), asca(t[:, 1]), asca(np.squeeze(kdata[:, i, :])), size)
 
             # images_series_rebuilt = np.moveaxis(images_series_rebuilt, 0, 1)
-            print(b1.shape)
-            print(fk.shape)
-            print(images_series_rebuilt[i].shape)
+            print("b1 shape".format(b1.shape) if b1 is not None else "b1 is None")
+            print("fk shape {}".format(fk.shape))
+            print("images_series_rebuilt shape {}".format(images_series_rebuilt.shape))
             if b1 is None:
                 print(fk.shape)
                 if fk.ndim>2:
@@ -1742,6 +1742,7 @@ def simulate_radial_undersampled_images_multi(kdata, trajectory, size, density_a
                     print('Taking abs of image')
                     images_series_rebuilt[i]=np.abs(fk)
             else:
+                print("Using b1")
                 images_series_rebuilt[i] = np.sum(b1.conj() * fk, axis=0)
 
     elif traj[0].shape[-1] == 3:  # 3D
