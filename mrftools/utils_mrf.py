@@ -1636,11 +1636,10 @@ def simulate_radial_undersampled_images_multi(kdata, trajectory, size, density_a
     traj = trajectory.get_traj_for_reconstruction(ntimesteps)
 
     nb_channels = len(kdata)
-    print(kdata.shape)
+
     if not (len(kdata[0]) == len(traj)):
         kdata = kdata.reshape(nb_channels, len(traj), -1)
-    print(traj.shape)
-    print(kdata.shape)
+    
     #print(traj[0].shape)
     npoint = trajectory.paramDict["npoint"]
     nb_allspokes = trajectory.paramDict["total_nspokes"]
@@ -1708,8 +1707,6 @@ def simulate_radial_undersampled_images_multi(kdata, trajectory, size, density_a
 
     output_shape = (ntimesteps,) + size
 
-    print(output_shape)
-
     flushed = False
 
     if memmap_file is not None:
@@ -1726,8 +1723,7 @@ def simulate_radial_undersampled_images_multi(kdata, trajectory, size, density_a
         
         print(kdata.shape)
         for i, t in tqdm(enumerate(traj)):
-            # print("traj shape {}".format(t.shape))
-            # print("kdata shape {}".format(kdata[:, i, :].shape))
+
             fk = finufft.nufft2d1(asca(t[:, 0]), asca(t[:, 1]), asca(np.squeeze(kdata[:, i, :])), size)
 
             # images_series_rebuilt = np.moveaxis(images_series_rebuilt, 0, 1)
@@ -1736,17 +1732,14 @@ def simulate_radial_undersampled_images_multi(kdata, trajectory, size, density_a
             # print("fk shape {}".format(fk.shape))
             # print("images_series_rebuilt shape {}".format(images_series_rebuilt.shape))
             if b1 is None:
-                print(fk.shape)
+                
                 if fk.ndim>2:
                     images_series_rebuilt[i] = np.sqrt(np.sum(np.abs(fk) ** 2, axis=0))
                 else:
                     print('Taking abs of image')
                     images_series_rebuilt[i]=np.abs(fk)
             else:
-                print("Using b1")
-                curr_image=np.sum(b1.conj() * fk, axis=0)
-                print(curr_image.shape)
-                print(images_series_rebuilt[i].shape)
+
                 # if curr_image.ndim < images_series_rebuilt[i].ndim:
                 #     curr_image=np.expand_dims(curr_image,axis=0)
                 images_series_rebuilt[i] = np.sum(b1.conj().squeeze() * fk, axis=0)
