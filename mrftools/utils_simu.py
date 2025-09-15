@@ -52,6 +52,58 @@ class T1MRFSS:
             result = result.reshape((self.nrep, -1) + result.shape[1:])[rep]
         return result
 
+
+class T1MRFSS_NoInv:
+    def __init__(self, FA, TE, TR, B1,T_recovery,nrep,rep=None):
+        """ build sequence """
+        seqlen = len(TE)
+        self.TR=TR
+        #self.inversion = epg.T(180, 0) # perfect inversion
+        self.T_recovery=T_recovery
+        self.nrep=nrep
+        self.rep=rep
+        seq=[]
+        for r in range(nrep):
+            curr_seq = [epg.Offset(0.000001)]
+            for i in range(seqlen):
+                echo = [
+                    epg.T(FA * B1[i], 90),
+                    epg.Wait(TE[i]),
+                    epg.ADC,
+                    epg.Wait(TR[i] - TE[i]),
+                    epg.SPOILER,
+                ]
+                curr_seq.extend(echo)
+            recovery=[epg.Wait(T_recovery)]
+            curr_seq.extend(recovery)
+            self.len_rep = len(curr_seq)
+            seq.extend(curr_seq)
+        self._seq = seq
+
+    def __call__(self, T1, T2, g, att, calc_deriv=False,**kwargs):
+        """ simulate sequence """
+        seq=[]
+        rep=self.rep
+        #print(self._seq)
+        for r in range(self.nrep):
+            curr_seq=self._seq[r*self.len_rep:(r+1)*(self.len_rep)]
+            curr_seq=[epg.modify(curr_seq, T1=T1, T2=T2, att=att, g=g,calc_deriv=calc_deriv)]
+            seq.extend(curr_seq)
+        #seq = [self.inversion, epg.modify(self._seq, T1=T1, T2=T2, att=att, g=g,calc_deriv=calc_deriv)]
+        if not(calc_deriv):
+            result=np.asarray(epg.simulate(seq, **kwargs))
+            if rep is None:#returning all repetitions
+                return result
+            else:#returning only the rep
+                result = result.reshape((self.nrep, -1) + result.shape[1:])[rep]
+                return result
+
+        else:
+            return epg.simulate(seq,calc_deriv=calc_deriv, **kwargs)
+
+
+
+
 def modifier_inv(op, **kwargs):
     """default modifier to handle 'T1', 'T2', 'g' and 'att' keywords
     TODO: handle differential operators (options gradients and hessian)
@@ -223,8 +275,6 @@ def generate_epg_dico_T1MRFSS_from_sequence(sequence_config,filedictconf,recover
     # mrfdict.save(dictfile, overwrite=overwrite)
     hdr={"sequence_config":sequence_config,"dict_config":dict_config,"recovery":recovery,"initial_repetitions":rep,"window":window,"sim_mode":sim_mode,"param_names":("wT1","fT1","att","df")}
     return mrfdict,hdr,dictfile
-
-
 
 def load_sequence_file(fileseq,recovery,min_TR_delay):
 

@@ -1307,7 +1307,7 @@ class SimpleDictSearch(Optimizer):
                 idx_max_all_unique_high_ff, alpha_optim_high_ff,J_optim_high_ff,phase_optim_high_ff = match_signals_v2_clustered_on_dico(
                     all_signals_high_ff, keys, pca_water, pca_fat, transformed_array_water_unique,
                     transformed_array_fat_unique, var_w_total, var_f_total, sig_wf_total,
-                    index_water_unique, index_fat_unique, useGPU_dictsearch, unique_keys_high_ff, split,param_names,clustering_windows, True,return_cost=True)
+                    index_water_unique, index_fat_unique, useGPU_dictsearch, unique_keys_high_ff, labels_high_ff,split,param_names,clustering_windows, True,return_cost=True)
             else:
                 idx_max_all_unique_high_ff,alpha_optim_high_ff=match_signals_v2_clustered_on_dico(all_signals_high_ff, keys, pca_water, pca_fat, transformed_array_water_unique,
                                                                                                   transformed_array_fat_unique, var_w_total, var_f_total, sig_wf_total,
