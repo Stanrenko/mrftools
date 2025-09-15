@@ -241,6 +241,93 @@ class ImageSeries(object):
 
         self.cached_images_series=images_series
 
+    def build_ref_images_v2(self,seq, useGPU=True, norm=None,phase=None,epg_opt = {"disp": True, 'max_nstate':30}):
+
+        # mask_np = np.asarray(maps["mask"])
+        # idx = np.where(mask_np > 0)
+        
+        # generate signals
+        wT1 = self.paramMap['wT1']
+        fT1 = self.paramMap['fT1']
+        wT2 = self.paramMap['wT2']
+        fT2 = self.paramMap['fT2']
+        att = self.paramMap['attB1']
+        df = self.paramMap['df']
+        df = np.asarray(df)/1000
+        ff = self.paramMap['ff']
+
+        if useGPU:
+            epg.set_array_module('cupy')
+        else:
+            epg.set_array_module('numpy')
+        # epg_opt = {"disp": True, 'max_nstate':30}
+            
+        # TR_delay=sequence_config["dTR"]
+
+        # seq = T1MRF_generic(sequence_config)
+
+
+        water_amp = [1]
+        water_cs = [0]
+        fat_amp = self.fat_amp
+        fat_cs = self.fat_cs
+    
+
+        # other options
+        # if window is None:
+        #     window = dict_config["window_size"]
+
+
+        # if start is None:
+        #     dictfile = prefix_dico  +"_TR{}_reco{}.dict".format(str(TR_delay),str(sequence_config['T_recovery']))
+        # else:
+        #     dictfile = prefix_dico + "_TR{}_reco{}_start{}.dict".format(str(TR_delay),str(sequence_config['T_recovery']),start)
+
+        # if dest is not None:
+        #     dictfile = str(pathlib.Path(dest) / pathlib.Path(dictfile).name)
+        # print("Generating dictionary {}".format(dictfile))
+
+        # water
+        print("Generate water signals.")
+        
+        water = seq(T1=np.array(wT1), T2=np.array(wT2), att=np.array(att), g=np.array(df)[:,np.newaxis], cs=[water_cs], frac=[water_amp], options= epg_opt)
+        water = np.transpose(water, (1, 0))
+
+
+        # fat
+        print("Generate fat signals.")
+        # eval = "dot(signal, amps)"
+        # args = {"amps": fat_amp}
+        # merge df and fat_cs df to dict
+        fat = seq(T1=np.array(fT1), T2=np.array(fT2), att=np.array(att), g=np.array(df)[:,np.newaxis], cs=[fat_cs], frac=[fat_amp], options= epg_opt)#, eval=eval, args=args)
+        fat = np.transpose(fat, (1, 0))
+        
+
+        water = np.array(water)
+        fat = np.array(fat)
+        
+        signal = (1-np.asarray(ff))*water + np.asarray(ff)*fat
+        
+        imgseries = np.zeros((signal.shape[0], self.mask.shape[0], self.mask.shape[1]), dtype=np.complex64)
+        imgseries = imgseries.reshape(signal.shape[0], -1)
+        imgseries[:, self.mask.flatten() > 0] = signal
+        imgseries = imgseries.reshape(signal.shape[0], self.mask.shape[0], self.mask.shape[1])
+        
+        if phase is not None:
+            imgseries *= np.exp(1j*phase)
+
+        if norm is not None :
+            imgseries *= norm
+
+        if phase is not None:
+            images_in_mask *= np.expand_dims(np.exp(1j*phase),axis=1)
+        
+        self.images_series=imgseries
+
+        #self.water_series = water_series
+        #self.fat_series=fat_series
+
+        self.cached_images_series=imgseries
 
     def generate_kdata(self,trajectory,eps=1e-4,movement_correction=False,perc=80,nthreads=1,fftw=0):
         print("Generating kdata")
