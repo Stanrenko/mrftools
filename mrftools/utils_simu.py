@@ -10,6 +10,78 @@ from .utils_mrf import groupby
 from .dictmodel import Dictionary
 
 
+from epgpy.sequence import Sequence, Variable, operators
+
+
+class T1MRF_generic:
+    def __init__(self, SEQ_CONFIG):
+        """ build sequence """
+        self.seqlen = len(SEQ_CONFIG['TE'])
+        self.READOUT = SEQ_CONFIG['readout']
+
+        if "TI" in SEQ_CONFIG:
+            self.TI = SEQ_CONFIG['TI']
+            self.inversion = epg.T(180, 0) 
+        else:
+            self.TI=None
+            self.inversion = None
+
+        self.TE = SEQ_CONFIG['TE']
+        self.FA = SEQ_CONFIG['FA']*SEQ_CONFIG['B1']
+        TR = [i + SEQ_CONFIG['dTR'] for i in self.TE]
+        self.TR = TR
+        
+        
+        self.T_recovery=SEQ_CONFIG['T_recovery']
+        # self.nrep=nrep
+        # self.rep=rep
+        seq=[]
+        if SEQ_CONFIG['readout'] == 'FLASH_ideal': 
+            self.spl = epg.SPOILER
+            self.PHI = [50 * i * (i + 1) / 2 for i in range(len(self.TE))]
+        elif SEQ_CONFIG['readout'] == 'FLASH': 
+            self.spl = epg.S(1)
+            self.PHI = [50 * i * (i + 1) / 2 for i in range(len(self.TE))]
+        elif SEQ_CONFIG['readout'] == 'FISP': 
+            self.spl = epg.S(1)
+            self.PHI = np.array([0]*len(self.TE))
+        elif SEQ_CONFIG['readout'] == 'pSSFP': 
+            self.spl = epg.S(1)
+            self.PHI = [1 * i * (i + 1) / 2 for i in range(len(self.TE))]
+        elif SEQ_CONFIG['readout'] == 'pSSFP_generic': 
+            self.spl = epg.S(1)
+            self.PHI = [SEQ_CONFIG['PHI'][i] * i * (i + 1) / 2 for i in range(len(self.TE))]
+        elif SEQ_CONFIG['readout'] == 'pSSFP_2': 
+            self.spl = epg.S(1)
+            self.PHI = np.array([1 * i * (i + 1) / 2 for i in range(int(np.round(len(self.TE)/2)))] + [(-1) * i * (i + 1) / 2 for i in range(int(np.round(len(self.TE)/2)))])            
+        elif SEQ_CONFIG['readout'] == 'TrueFISP':
+            self.spl = epg.NULL
+            self.PHI = np.array([0, 180] * (len(self.TE) // 2) + [0] * (len(self.TE) % 2)) 
+
+    def __call__(self, T1, T2, g, att, cs, frac, **kwargs):
+        """ simulate sequence """
+        self.init = [epg.PD(frac[j]) for j in range(len(frac))]
+        self.rf = [epg.T(self.FA[i]*att, self.PHI[i]) for i in range(self.seqlen)] 
+        self.adc = [epg.Adc(phase=-self.rf[i].phi) for i in range(self.seqlen)]
+        if self.TI is not None:
+            self.rlx0 = epg.E(self.TI, T1, T2, duration=True) # inversion delay
+        self.rlx1 = [[epg.E(self.TE[i], T1, T2, cs[j] + g, duration=True) for i in range(len(self.FA))]  for j in range(len(cs))] 
+        self.rlx2 = [[epg.E(self.TR[i] - self.TE[i], T1, T2, cs[j] + g, duration=True) for i in range(len(self.FA))] for j in range(len(cs))] 
+        self.rlx3 = epg.E(self.T_recovery, T1, T2, duration=True) # recovery
+
+        if self.TI is not None:    
+            seq = [[self.init[j]] + [self.inversion] + [self.rlx0] + [[self.rf[i], self.rlx1[j][i], self.adc[i], self.rlx2[j][i], self.spl] for i in range(self.seqlen)] for j in range(len(cs))] 
+        else:
+            seq = [[self.init[j]]  + [[self.rf[i], self.rlx1[j][i], self.adc[i], self.rlx2[j][i], self.spl] for i in range(self.seqlen)] for j in range(len(cs))] 
+
+
+        result=np.asarray(epg.simulate(seq, disp=True, max_nstate=30))
+        
+        result = np.reshape(result, [len(cs),len(self.FA),*np.shape(result)[1:]])
+        result = np.sum(np.asarray(frac)[:, np.newaxis, np.newaxis] * result , axis=0)
+        
+        return result
+
 class T1MRFSS:
     def __init__(self, FA, TI, TE, TR, B1,T_recovery,nrep,rep=None):
         """ build sequence """
