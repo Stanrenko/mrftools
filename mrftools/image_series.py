@@ -102,7 +102,7 @@ class ImageSeries(object):
 
         self.image_size=self.paramDict["image_size"]
         self.images_series=None
-        self.cached_images_series=None
+
 
         self.mask =np.ones(self.image_size)
         self.paramMap=None
@@ -134,119 +134,7 @@ class ImageSeries(object):
         self.fat_cs = [- value / 1000 for value in fat_cs]  # temp
 
 
-    def build_ref_images(self,seq,norm=None,phase=None,epg_opt = {"disp": True, 'max_nstate':30},useGPU=True):
-
-        if useGPU:
-            epg.set_array_module('cupy')
-        else:
-            epg.set_array_module('numpy')
-
-        print("Building Ref Images")
-        if self.paramMap is None:
-            return ValueError("buildparamMap should be called prior to image simulation")
-
-        list_keys = ["wT1","wT2","fT1","fT2","attB1","df","ff"]
-        for k in list_keys:
-            if k not in self.paramMap:
-                raise ValueError("key {} should be in the paramMap".format(k))
-
-        map_all_on_mask = np.stack(list(self.paramMap.values())[:-1], axis=-1)
-        map_ff_on_mask = self.paramMap["ff"]
-
-        params_all = np.reshape(map_all_on_mask, (-1, 6))
-        params_unique = np.unique(params_all, axis=0)
-
-        wT1_in_map = np.unique(params_unique[:, 0])
-        wT2_in_map = np.unique(params_unique[:, 1])
-        fT1_in_map = np.unique(params_unique[:, 2])
-        fT2_in_map = np.unique(params_unique[:, 3])
-        attB1_in_map = np.unique(params_unique[:, 4])
-        df_in_map = np.unique(params_unique[:, 5])
-
-        # Simulating the image sequence
-
-        # water
-        print("Simulating Water Signal")
-
-        if self.paramDict["gen_mode"]=="loop":
-            water_list=[]
-            print("Simulation in loop mode")
-            for param in tqdm(params_unique):
-                current_water = seq(T1=param[0], T2=param[1], att=param[4], g=param[5],options= epg_opt)
-                water_list.append(current_water)
-            water = np.squeeze(np.array(water_list))
-            del water_list
-            water=water.T
-
-        else:
-            water = seq(T1=wT1_in_map, T2=wT2_in_map, att=[[attB1_in_map]], g=[[[df_in_map]]],options= epg_opt)
-
-
-
-        # fat
-        print("Simulating Fat Signal")
-
-
-        if self.paramDict["gen_mode"] == "loop":
-            fat_list = []
-            print("Simulation in loop mode")
-            for param in tqdm(params_unique):
-                current_fat = seq(T1=param[2], T2=param[3], att=param[4], g=[cs + param[5] for cs in self.fat_cs],options= epg_opt)#,eval=eval,args=args)
-                current_fat=current_fat @ self.fat_amp
-                fat_list.append(current_fat)
-            fat = np.squeeze(np.array(fat_list))
-            del fat_list
-            fat = fat.T
-
-        else:
-            # merge df and fat_cs df to dict
-            fatdf_in_map = [[cs + f for cs in self.fat_cs] for f in df_in_map]
-            fat = seq(T1=[fT1_in_map], T2=fT2_in_map, att=[[attB1_in_map]], g=[[[fatdf_in_map]]],options= epg_opt)#, eval=eval, args=args)
-            fat = fat @ self.fat_amp
-
-        # join water and fat
-        print("Build dictionary.")
-        if self.paramDict["gen_mode"] == "loop":
-            keys=[tuple(param) for param in params_unique]
-            values=np.stack((water, fat),axis=-1)
-            values = np.moveaxis(values, 0, 1)
-        else :
-            keys = list(itertools.product(wT1_in_map, wT2_in_map, fT1_in_map, fT2_in_map, attB1_in_map, df_in_map))
-            print(water.shape)
-            print(fat.shape)
-            values = np.stack(np.broadcast_arrays(water, fat), axis=-1)
-            values = np.moveaxis(values.reshape(len(values), -1, 2), 0, 1)
-        mrfdict = Dictionary(keys, values)
-        
-
-        images_series = np.zeros(self.image_size + (values.shape[-2],), dtype=np.complex_)
-
-        print("Building image series")
-        images_in_mask = np.array([mrfdict[tuple(pixel_params)][:, 0] * (1 - map_ff_on_mask[i]) + mrfdict[tuple(
-            pixel_params)][:, 1] * (map_ff_on_mask[i]) for (i, pixel_params) in enumerate(map_all_on_mask)])
-
-        if norm is not None :
-            images_in_mask *= np.expand_dims(norm,axis=1)
-
-        if phase is not None:
-            images_in_mask *= np.expand_dims(np.exp(1j*phase),axis=1)
-
-        print("Image series built")
-
-        images_series[self.mask > 0, :] = images_in_mask
-
-        images_series = np.moveaxis(images_series, -1, 0)
-
-        self.images_series=images_series
-
-        self.cached_images_series=images_series
-
-    def build_ref_images_v2(self,seq, useGPU=True, norm=None,phase=None,epg_opt = {"disp": True, 'max_nstate':30}):
-
-        # mask_np = np.asarray(maps["mask"])
-        # idx = np.where(mask_np > 0)
-        
-        # generate signals
+    def build_ref_images(self,seq,norm=None,phase=None):
         wT1 = self.paramMap['wT1']
         fT1 = self.paramMap['fT1']
         wT2 = self.paramMap['wT2']
@@ -256,78 +144,39 @@ class ImageSeries(object):
         df = np.asarray(df)/1000
         ff = self.paramMap['ff']
 
-        if useGPU:
-            epg.set_array_module('cupy')
-        else:
-            epg.set_array_module('numpy')
-        # epg_opt = {"disp": True, 'max_nstate':30}
-            
-        # TR_delay=sequence_config["dTR"]
-
-        # seq = T1MRF_generic(sequence_config)
-
-
         water_amp = [1]
         water_cs = [0]
         fat_amp = self.fat_amp
         fat_cs = self.fat_cs
-    
 
-        # other options
-        # if window is None:
-        #     window = dict_config["window_size"]
-
-
-        # if start is None:
-        #     dictfile = prefix_dico  +"_TR{}_reco{}.dict".format(str(TR_delay),str(sequence_config['T_recovery']))
-        # else:
-        #     dictfile = prefix_dico + "_TR{}_reco{}_start{}.dict".format(str(TR_delay),str(sequence_config['T_recovery']),start)
-
-        # if dest is not None:
-        #     dictfile = str(pathlib.Path(dest) / pathlib.Path(dictfile).name)
-        # print("Generating dictionary {}".format(dictfile))
-
-        # water
         print("Generate water signals.")
-        
-        water = seq(T1=np.array(wT1), T2=np.array(wT2), att=np.array(att), g=np.array(df)[:,np.newaxis], cs=[water_cs], frac=[water_amp], options= epg_opt)
-        water = np.transpose(water, (1, 0))
+            
+        water = seq(T1=np.array(wT1), T2=np.array(wT2), att=np.array(att), g=np.array(df), cs=water_cs, frac=water_amp).squeeze()
+        water= np.transpose(water, (1, 0))
 
-
-        # fat
         print("Generate fat signals.")
-        # eval = "dot(signal, amps)"
-        # args = {"amps": fat_amp}
-        # merge df and fat_cs df to dict
-        fat = seq(T1=np.array(fT1), T2=np.array(fT2), att=np.array(att), g=np.array(df)[:,np.newaxis], cs=[fat_cs], frac=[fat_amp], options= epg_opt)#, eval=eval, args=args)
+        fat = seq(T1=np.array(fT1), T2=np.array(fT2), att=np.array(att), g=np.array(df),cs=fat_cs,frac=fat_amp)#, eval=eval, args=args)
         fat = np.transpose(fat, (1, 0))
-        
+
 
         water = np.array(water)
         fat = np.array(fat)
-        
-        signal = (1-np.asarray(ff))*water + np.asarray(ff)*fat
-        
-        imgseries = np.zeros((signal.shape[0], self.mask.shape[0], self.mask.shape[1]), dtype=np.complex64)
-        imgseries = imgseries.reshape(signal.shape[0], -1)
-        imgseries[:, self.mask.flatten() > 0] = signal
-        imgseries = imgseries.reshape(signal.shape[0], self.mask.shape[0], self.mask.shape[1])
-        
+        signal = (1-np.asarray(ff[:,None]))*water + np.asarray(ff[:,None])*fat
+
+        if norm is not None:
+            signal*=norm[:,None]
         if phase is not None:
-            imgseries *= np.exp(1j*phase)
+            signal*=np.exp(1j*phase[:,None])
 
-        if norm is not None :
-            imgseries *= norm
 
-        if phase is not None:
-            images_in_mask *= np.expand_dims(np.exp(1j*phase),axis=1)
-        
-        self.images_series=imgseries
+        print("Building image series")
 
-        #self.water_series = water_series
-        #self.fat_series=fat_series
+        images_series = np.zeros(self.image_size + (signal.shape[-1],), dtype=np.complex128)
+        images_series[self.mask > 0, :] = signal
+        self.images_series=np.moveaxis(images_series, -1, 0)
 
-        self.cached_images_series=imgseries
+        print("Image series built")
+
 
     def generate_kdata(self,trajectory,eps=1e-4,movement_correction=False,perc=80,nthreads=1,fftw=0):
         print("Generating kdata")
@@ -453,29 +302,9 @@ class ImageSeries(object):
     def roundParam(self,paramName,decimals=0):
         self.paramMap[paramName]=np.round(self.paramMap[paramName],decimals=decimals)
 
-    def reset_image_series(self):
-        self.images_series=self.cached_images_series
+    
 
-    def compare_patterns(self,pixel_number):
-
-        fig,(ax1,ax2,ax3) = plt.subplots(1,3)
-        ax1.plot(np.real(self.cached_images_series[:,pixel_number[0],pixel_number[1]]),label="original image - real part")
-        ax1.plot(np.real(self.images_series[:, pixel_number[0],pixel_number[1]]), label="transformed image - real part")
-        ax1.legend()
-        ax2.plot(np.imag(self.cached_images_series[:, pixel_number[0], pixel_number[1]]),
-                 label="original image - imaginary part")
-        ax2.plot(np.imag(self.images_series[:, pixel_number[0], pixel_number[1]]),
-                 label="transformed - imaginary part")
-        ax2.legend()
-
-        ax3.plot(np.abs(self.cached_images_series[:, pixel_number[0], pixel_number[1]]),
-                 label="original image - norm")
-        ax3.plot(np.abs(self.images_series[:, pixel_number[0], pixel_number[1]]),
-                 label="transformed - norm")
-        ax3.legend()
-
-        plt.show()
-
+    
 
 
 class MapFromDict(ImageSeries):

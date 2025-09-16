@@ -25,6 +25,7 @@ except:
 from . import io_twixt
 from .dictmodel import Dictionary
 
+
 np.bool=np.bool_
 asca = np.ascontiguousarray
 
@@ -2466,3 +2467,4 @@ def compress_dictionary(dico,phi,L0):
     dico["mrfdict_light_L0{}".format(L0)]=(array_water_light_projected,array_fat_light_projected,keys_light)
     dico["mrfdict_L0{}".format(L0)]=(array_water_projected,array_fat_projected,keys)
     return dico
+

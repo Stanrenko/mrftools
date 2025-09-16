@@ -9,7 +9,7 @@ from .utils_mrf import *
 from .utils_simu import *
 from .trajectory import Radial
 from skimage.restoration import denoise_nl_means, estimate_sigma
-
+from .image_series import MapFromDict
 
 
 
@@ -644,3 +644,53 @@ def denoise(data,h=-1,volscaling=10,search_radius=11,patch_radius=7):
         filteringParam=h
 
     return denoise_nl_means(data,h=filteringParam,fast_mode=True,preserve_range=True,patch_size=patch_radius,patch_distance=search_radius)
+
+
+
+
+def generate_dixon_volumes_for_segmentation(all_maps,t1_weighted=False):
+    
+    sequence_config={}
+    sequence_config["readout"]="FLASH_ideal"
+    sequence_config["TE"]=np.array([2.39,3.45])
+
+    if t1_weighted:
+        sequence_config["dTR"]=600
+        sequence_config["TI"]=10
+    else:
+        sequence_config["dTR"]=10000
+
+
+    sequence_config["FA"]=5.0
+        
+    sequence_config["B1"]=np.array([3.0,3.0])
+
+    nrep=1
+    rep=nrep-1
+
+    Treco=10000
+    sequence_config["T_recovery"]=Treco
+
+    seq=T1MRF_generic(sequence_config)
+
+
+    mask=all_maps[0][1]
+    map_rebuilt=all_maps[0][0]
+    print(map_rebuilt.keys())
+    map_rebuilt["attB1"]=np.ones_like(map_rebuilt["attB1"])
+
+
+    norm=all_maps[0][4]
+    phase=all_maps[0][3]
+
+    values_simu = [makevol(map_rebuilt[k], mask > 0) for k in map_rebuilt.keys()]
+    map_for_sim = dict(zip(list(map_rebuilt.keys()), values_simu))
+
+    m = MapFromDict("RebuiltMapFromParams", paramMap=map_for_sim, rounding=True)
+    m.buildParamMap()
+    m.build_ref_images(seq,norm=norm,phase=phase)
+
+    volume_ip=np.abs(m.images_series[0])
+    volume_oop=np.abs(m.images_series[1])
+
+    return volume_ip, volume_oop
