@@ -345,7 +345,7 @@ def generate_epg_dico_T1MRFSS_from_sequence(sequence_config,filedictconf,recover
     # print("Save dictionary.")
     mrfdict = Dictionary(keys, values)
     # mrfdict.save(dictfile, overwrite=overwrite)
-    hdr={"sequence_config":sequence_config,"dict_config":dict_config,"recovery":recovery,"initial_repetitions":rep,"window":window,"sim_mode":sim_mode,"param_names":("wT1","fT1","att","df")}
+    hdr={"sequence_config":sequence_config,"dict_config":dict_config,"recovery":recovery,"initial_repetitions":rep,"window":window,"sim_mode":sim_mode,"param_names":("wT1","fT1","attB1","df")}
     return mrfdict,hdr,dictfile
 
 def load_sequence_file(fileseq,recovery,min_TR_delay):
