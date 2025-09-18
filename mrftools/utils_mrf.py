@@ -2154,7 +2154,7 @@ def convertArrayToImageHelperDicom(dico,data,apply_offset=False,reorient=True):
                 #data=np.moveaxis(data,0,2)
         elif orientation=="transversal":
                 # data=np.moveaxis(data,offset,offset+2)
-            data=np.moveaxis(data,offset+1,offset+2),axis=(offset+1)
+            data=np.moveaxis(data,offset+1,offset+2)
             # data=np.flip(np.moveaxis(data,offset+1,offset+2))
         elif orientation=="sagittal":
                 # data=np.moveaxis(data,offset,offset+2)
