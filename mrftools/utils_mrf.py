@@ -2078,7 +2078,7 @@ def convertArrayToImageHelper(dico,data,apply_offset=False,reorient=True):
     spacing=dico["spacing"]
     origin=dico["origin"]
     orientation=dico["orientation"]
-    is3D=dico["is3D"]
+
 
     if apply_offset:
 
