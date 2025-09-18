@@ -2119,6 +2119,51 @@ def convertArrayToImageHelper(dico,data,apply_offset=False,reorient=True):
 
 
 
+def convertArrayToImageHelperDicom(dico,data,apply_offset=False,reorient=True):
+
+    spacing=dico["spacing"]
+    origin=dico["origin"]
+    orientation=dico["orientation"]
+
+
+    if apply_offset:
+
+        offset=dico["offset"]
+        print("Applying offset {}".format(offset))
+        
+        origin=np.array(origin)
+        origin[-1]=origin[-1]+offset
+        origin=tuple(origin)
+    
+
+    geom={"origin":origin,"spacing":spacing}
+    # print(geom)
+
+    if data.ndim==2:
+        data=data[None,...]
+    # print(data.shape)
+    
+    # curr_map=np.flip(np.moveaxis(curr_map,0,2),axis=(0,1,2))
+
+    if reorient:
+        print("Reorienting input volume")
+        offset=data.ndim-3
+        if orientation=="coronal":
+            print("WARNING: coronal orientation not tested - should be checked")
+            data=np.flip(np.moveaxis(data,(offset,offset+1,offset+2),(offset+1,offset+2,offset)),axis=(offset,offset+1))
+                #data=np.moveaxis(data,0,2)
+        elif orientation=="transversal":
+                # data=np.moveaxis(data,offset,offset+2)
+            data=np.moveaxis(data,offset+1,offset+2),axis=(offset+1)
+            # data=np.flip(np.moveaxis(data,offset+1,offset+2))
+        elif orientation=="sagittal":
+                # data=np.moveaxis(data,offset,offset+2)
+            print("WARNING: sagittal orientation not tested - should be checked")
+            data=np.flip(np.moveaxis(data,(offset,offset+1,offset+2),(offset,offset+2,offset+1)))
+    
+    return data,geom
+
+
 def cutup(data, blck, strd):
     """
     Extracts overlapping patches from an ND array using strided views, handling non-multiple strides,
