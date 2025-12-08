@@ -75,6 +75,7 @@ if __name__ == '__main__':
     parser_maps.add_argument('--volumestype', type=str,nargs='?', const="raw", default="raw")
 
     parser_dico = subparsers.add_parser('generate_dico')
+    parser_dico.add_argument('--datafile', type=str, default=None)
     parser_dico.add_argument('--dictdir', type=str, default='./mrf_dict')
     parser_dico.add_argument('--sequencefile', type=str,nargs='?', const=None, default=None)
     parser_dico.add_argument('--dictconf', type=str,nargs='?', const=None, default=None)
@@ -85,6 +86,8 @@ if __name__ == '__main__':
     parser_dico.add_argument('--isbuildphi', type=bool,nargs='?', const=False, default=False) 
     parser_dico.add_argument('--force', type=bool,nargs='?', const=False, default=False) 
     parser_dico.add_argument('--pca', type=int,nargs='?', const=6, default=6)
+    parser_dico.add_argument('--siemens', type=bool,nargs='?', const=False, default=False)
+    parser_dico.add_argument('--suffix', type=str, default=None)
 
 
     parser_ice_dico = subparsers.add_parser('generate_ice_dico')
@@ -314,16 +317,33 @@ if __name__ == '__main__':
         save_maps(all_maps,file_seq)
 
     elif args.command=="generate_dico":
+
+        if args.datafile is None:
+            if args.echospacing is None:
+                raise ValueError("Echo spacing should be provided when no datafile is given")
+            min_TR_delay=args.echospacing
+            TI=args.TI
+        else:
+            import numpy as np
+            seq_params = build_dico_seqParams(str(args.datafile))
+            min_TR_delay=np.round(seq_params["dTR"],2)
+            TI=np.round(seq_params["TI"],2)
+
+            print("Echo spacing of {} ms read in the .dat file".format(min_TR_delay))
+            print("Inversion time of {} ms read in the .dat file".format(TI))
         dictdir = pathlib.Path(args.dictdir)
         sequence_file= args.sequencefile
         reco=args.reco
-        min_TR_delay=args.echospacing
         dictconf=args.dictconf
         dictconf_light=args.dictconflight
-        TI=args.TI
         is_build_phi=args.isbuildphi
         force=args.force
         L0=int(args.pca)
+        generate_siemens_files=bool(args.siemens)
+        idea_files_suffix=args.suffix
+        
+
+
 
         if sequence_file is None:
             print("No sequence config was given - using default SEQ_CONFIG")
@@ -340,7 +360,7 @@ if __name__ == '__main__':
             parser.exit()
         dictdir.mkdir(parents=True, exist_ok=True)
 
-        generate_dictionaries(sequence_file,reco,min_TR_delay,dictconf,dictconf_light,TI=8.32, dest=dictdir,is_build_phi=is_build_phi,L0=L0)
+        generate_dictionaries(sequence_file,reco,min_TR_delay,dictconf,dictconf_light,TI=TI, dest=dictdir,is_build_phi=is_build_phi,L0=L0,generate_siemens_files=generate_siemens_files,idea_files_suffix=idea_files_suffix)
 
 
     elif args.command=="generate_ice_dico":

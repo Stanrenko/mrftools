@@ -407,7 +407,7 @@ def save_maps(all_maps, file_seqParams, keys = ["ff","wT1","attB1","df"]):
 
 
 
-def generate_dictionaries(sequence_file,reco,min_TR_delay,dictconf,dictconf_light,TI=8.32, dest=None,diconame="dico",is_build_phi=False,L0=6):
+def generate_dictionaries(sequence_file,reco,min_TR_delay,dictconf,dictconf_light,TI=8.32, dest=None,diconame="dico",is_build_phi=False,L0=6,generate_siemens_files=False,idea_files_suffix=None):
     '''
     Generates dictionaries from sequence and dico configuration files
     inputs:
@@ -448,9 +448,67 @@ def generate_dictionaries(sequence_file,reco,min_TR_delay,dictconf,dictconf_ligh
         pickle.dump(dico_full_with_hdr,file)
     print("Generated dictionary {}".format(dico_full_name))
 
+    if generate_siemens_files:
+        generate_ice_dictionary(dico_full_name,threshold_pca=L0)
+        generate_idea_sequence_files(sequence_file,dest=dest,suffix=idea_files_suffix)
+
+
     return
 
 
+def generate_idea_sequence_files(input_json,dest=None,suffix=None):
+
+        
+    # Resolve directory of the JSON file
+    if dest is None:
+        json_dir = os.path.dirname(os.path.abspath(input_json))
+    else:
+        json_dir = dest
+
+    # Output text files (same folder as JSON)
+    if suffix is not None:
+        fa_file = os.path.join(json_dir, f"ArbitraryFA_{suffix}.txt")
+        te_file = os.path.join(json_dir, f"ArbitraryTE_{suffix}.txt")
+    else:   
+        fa_file = os.path.join(json_dir, "ArbitraryFA.txt")
+        te_file = os.path.join(json_dir, "ArbitraryTE.txt")
+
+    # Load JSON
+    with open(input_json, "r") as f:
+        seq = json.load(f)
+
+    FA_list = seq.get("B1",[])
+    TE_list = seq.get("TE", [])
+
+    n_points = len(TE_list)
+
+
+
+    # Compute FA min / max
+    fa_min = min(FA_list)
+    fa_max = max(FA_list)
+
+    # Compute TE min / max
+    te_min = min(TE_list)
+    te_max = max(TE_list)
+
+    # ---- Write FA values with your specific header ----
+    with open(fa_file, "w") as f:
+        f.write(f"# Number of fingerprinting points = {float(n_points):.6f}\n")
+        f.write(f"# max FA = {float(fa_max):.6f}\n")
+        f.write(f"# min FA = {float(fa_min):.6f}\n\n")
+        for v in FA_list:
+            f.write(f"{v}\n")
+
+    # ---- Write TE values with your specific header ----
+    with open(te_file, "w") as f:
+        f.write(f"# Number of fingerprinting points = {float(n_points):.6f}\n")
+        f.write(f"# max TE = {float(te_max):.6f}\n")
+        f.write(f"# min TE = {float(te_min):.6f}\n\n")
+        for v in TE_list:
+            f.write(f"{v}\n")
+
+    print(f"ArbitraryFA.txt and ArbitraryTE.txt created in {dest} folder")
 
 def generate_ice_dictionary(dicofull_file,threshold_pca=10):
     '''

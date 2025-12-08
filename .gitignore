@@ -6,7 +6,7 @@ data/
 __pycache__
 notebooks/
 resources/config/
-resources/dico/
+# resources/dico/
 build/
 dist/
 
