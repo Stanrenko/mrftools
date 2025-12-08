@@ -71,6 +71,8 @@ If no dictionary for the sequence exists, the dictionary (dico/mrf_dictconf_Dico
 python scripts/cli.py generate_dico --sequencefile dico/mrf_sequence_adjusted.json --dictconf dico/mrf_dictconf_Dico2_Invivo.json --dictconflight dico/mrf_dictconf_Dico2_Invivo_light_for_matching.json --reco 5.0 --echospacing 1.11 --TI 8.32
 ```
 
+### 6. For C2P users: Siemens IDEA and ICE reconstruction
+
 For streamlining acquisition and reconstruction on the Siemens MRI scanners, one can use an existing .dat file to extract echo spacing and inversion time directly for dictionary generation. Binary dictionaries and varying TE and FA acquisition parameters .txt files can be generated as well for the Siemens IDEA acquistion and ICE reconstruction.
 
 ```
