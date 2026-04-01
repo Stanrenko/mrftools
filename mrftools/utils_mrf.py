@@ -2,16 +2,25 @@ import numpy as np
 import itertools
 from scipy import ndimage
 from tqdm import tqdm
-import twixtools
+try:
+    import twixtools
+except:
+    pass
 from datetime import datetime
 from copy import copy
 import os
 import pickle
 import finufft
-from mpl_toolkits.axes_grid1 import ImageGrid
+try:
+    from mpl_toolkits.axes_grid1 import ImageGrid
+except:
+    pass
 from sklearn.base import BaseEstimator, TransformerMixin  # This function just makes sure that the object is fitted
 from sklearn.utils.validation import check_is_fitted
-import matplotlib.pyplot as plt
+try:
+    import matplotlib.pyplot as plt
+except:
+    pass
 from PIL import Image
 import pywt
 import dask.array as da

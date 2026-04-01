@@ -121,12 +121,19 @@ def t1_mfr_seq(SEQ_CONFIG):
     frac = Variable("frac")
 
     seqlen = len(SEQ_CONFIG['TE'])
-    READOUT = SEQ_CONFIG['readout']
-    TI = SEQ_CONFIG['TI']
+    # READOUT = SEQ_CONFIG['readout']
+    if 'TI' not in SEQ_CONFIG:
+        has_inversion=False
+    else:
+        TI = SEQ_CONFIG['TI']
+        has_inversion=True
+    
     TE = SEQ_CONFIG['TE']
     FA = SEQ_CONFIG['FA']*SEQ_CONFIG['B1']
     TR = [i + SEQ_CONFIG['dTR'] for i in TE]
     T_recovery=SEQ_CONFIG['T_recovery']
+
+    
 
 
 
@@ -147,23 +154,41 @@ def t1_mfr_seq(SEQ_CONFIG):
         PHI = np.array([1 * i * (i + 1) / 2 for i in range(int(np.round(len(TE)/2)))] + [(-1) * i * (i + 1) / 2 for i in range(int(np.round(len(TE)/2)))])
     elif SEQ_CONFIG['readout'] == 'pSSFP_generic': 
         spl = operators.S(1)
-        PHI = [SEQ_CONFIG['PHI'][i] * i * (i + 1) / 2 for i in range(len(TE))]
+        print("Changed phase calculation")
+        deltaPHI=np.cumsum(SEQ_CONFIG["PHI"])
+        PHI=[0]+list(np.cumsum(deltaPHI))[:-1]
+        # PHI = [SEQ_CONFIG['PHI'][i] * i * (i + 1) / 2 for i in range(len(TE))]
     elif SEQ_CONFIG['readout'] == 'TrueFISP':
         spl = operators.NULL
         PHI = np.array([0, 180] * (len(TE) // 2) + [0] * (len(TE) % 2)) 
 
     init = operators.PD(frac)
-    inversion = operators.T(180, 0)
     rf = [operators.T(FA[i]*att, PHI[i]) for i in range(seqlen)] 
     adc = [operators.Adc(phase=-rf[i].phi, reduce=1) for i in range(seqlen)]
     # adc = [operators.Adc(phase=-rf[i].phi) for i in range(seqlen)]
-    rlx0 = operators.E(TI, T1, T2, duration=True) 
+     
     rlx1 = [operators.E(TE[i], T1, T2, cs + g, duration=True) for i in range(len(FA))] 
     rlx2 = [operators.E(TR[i] - TE[i], T1, T2, cs + g, duration=True) for i in range(len(FA))]
     # rlx3 = operators.E(T_recovery, T1, T2, duration=True)
-            
-    seq = Sequence([init] + [inversion] + [rlx0] + [[rf[i], rlx1[i], adc[i], rlx2[i], spl] for i in range(seqlen)])
     
+    if has_inversion:
+        inversion = operators.T(180, 0)
+        rlx0 = operators.E(TI, T1, T2, duration=True)
+        if "T_inv" in SEQ_CONFIG:
+            T_inv=SEQ_CONFIG["T_inv"]
+            print(f"Inversion played after {T_inv} TRs")
+
+            sequence_list = [init] + [[rf[i], rlx1[i], adc[i], rlx2[i], spl] for i in range(T_inv)]
+            sequence_list +=[inversion] + [rlx0]
+            sequence_list += [[rf[i], rlx1[i], adc[i], rlx2[i], spl] for i in range(T_inv,seqlen)]
+            seq=Sequence(sequence_list)
+
+        else:
+            seq = Sequence([init] + [inversion] + [rlx0] + [[rf[i], rlx1[i], adc[i], rlx2[i], spl] for i in range(seqlen)])
+    else:
+        print("No Inversion")
+        seq = Sequence([init]  + [[rf[i], rlx1[i], adc[i], rlx2[i], spl] for i in range(seqlen)])
+
     return seq
     
 def modifier_inv(op, **kwargs):
