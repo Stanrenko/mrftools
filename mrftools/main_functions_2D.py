@@ -474,8 +474,12 @@ def generate_idea_sequence_files(input_json,dest=None,suffix=None):
         te_file = os.path.join(json_dir, "ArbitraryTE.txt")
 
     # Load JSON
-    with open(input_json, "r") as f:
-        seq = json.load(f)
+    if type(input_json)==str:
+        with open(input_json, "r") as file:
+            seq = json.load(file)
+    elif type(input_json)==dict:
+        seq = input_json
+
 
     FA_list = seq.get("B1",[])
     TE_list = seq.get("TE", [])

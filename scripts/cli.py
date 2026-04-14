@@ -336,7 +336,7 @@ if __name__ == '__main__':
         reco=args.reco
         dictconf=args.dictconf
         dictconf_light=args.dictconflight
-        is_build_phi=args.isbuildphi
+        is_build_phi=bool(args.isbuildphi)
         force=args.force
         L0=int(args.pca)
         generate_siemens_files=bool(args.siemens)
@@ -349,7 +349,7 @@ if __name__ == '__main__':
             print("No sequence config was given - using default SEQ_CONFIG")
             sequence_file=SEQ_CONFIG
         if dictconf is None:
-            print("No dict config was given - using default DICT_LIGHT")
+            print("No dict config was given - using default DICT_CONFIG")
             dictconf=DICT_CONFIG
         if dictconf_light is None:
             print("No dict light config was given - using default DICT_LIGHT_CONFIG")
