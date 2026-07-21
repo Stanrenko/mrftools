@@ -303,10 +303,10 @@ def check_dico(dico_hdr, seqParams):
     TR_delay=np.round(sequence_config["TR"][0]-sequence_config["TE"][0],2)
 
     if np.abs(dico_seqParams["dTR"]-TR_delay)>0.01:
-        raise ValueError("Echo spacing from the dictionary ({} ms) does not match sequence echo spacing ({} ms)".format(dico_seqParams["dTR"],TR_delay))
+        raise ValueError("Echo spacing from the dictionary ({} ms) does not match sequence echo spacing ({} ms)".format(TR_delay,dico_seqParams["dTR"]))
     
     else:
-        print("Dictionary OK: Echo spacing from the dictionary ({} ms) close to sequence echo spacing ({} ms)".format(dico_seqParams["dTR"],TR_delay))
+        print("Dictionary OK: Echo spacing from the dictionary ({} ms) close to sequence echo spacing ({} ms)".format(TR_delay,dico_seqParams["dTR"]))
 
 
 
