@@ -1391,8 +1391,12 @@ def build_dico_seqParams(filename,index=-1):
     
     protocol=hdr[index]["tProtocolName"]
     print(protocol)
-    
-    if (protocol=="T1_mapping")or("raFin_1400Seg_1400Interleaved" in protocol)or("T1MAP" in protocol)or("customIR_Reco" in protocol)or("T1_MAP" in protocol)or("MRF2D" in protocol):
+    sequence_name=str.split(hdr[index]["tSequenceFileName"],"%CustomerSeq%\\")[-1]
+    print(sequence_name)
+
+    if (sequence_name=="raFin"):
+        nb_segments=alFree[3]
+    elif (protocol=="T1_mapping")or("raFin_1400Seg_1400Interleaved" in protocol)or("T1MAP" in protocol)or("customIR_Reco" in protocol)or("T1_MAP" in protocol)or("MRF2D" in protocol):
         nb_segments=alFree[3]
     else:
         nb_segments=alFree[4]
