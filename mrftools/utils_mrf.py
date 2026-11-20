@@ -135,7 +135,7 @@ def combine_mrf_dict_components(mrfdict ,FF_list ,aggregate_components=True):
     return keys_with_ff,signal_reshaped
 
 
-def build_phi(mrfdict,FFs=np.arange(0.1,1.09,0.1)):
+def build_phi(mrfdict,FFs=np.arange(0.0,1.09,0.1)):
 
     #mrfdict = dictsearch.Dictionary()
     print("Generating full dictionary")

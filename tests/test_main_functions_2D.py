@@ -6,6 +6,7 @@ few seconds. Reading Siemens .dat files is not tested (needs acquired data); ext
 replaced by a stub.
 """
 import glob
+import inspect
 import os
 import pickle
 
@@ -16,6 +17,7 @@ import SimpleITK as sitk
 
 from mrftools import main_functions_2D as mf
 from mrftools.trajectory import Radial
+from mrftools.utils_mrf import build_phi
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SEQUENCE_FILE = os.path.join(ROOT, "mrftools", "dico_config", "mrf_sequence_adjusted.json")
@@ -304,6 +306,25 @@ def test_generated_fingerprints_depend_on_parameters(dico):
     gram = np.abs(norm @ norm.conj().T)
     np.fill_diagonal(gram, 0)
     assert gram.max() < 0.9999  # no two dictionary entries are identical up to scale
+
+
+def test_build_phi_covers_pure_water_and_pure_fat(dico):
+    mrfdict = dico["mrfdict"]
+    phi = build_phi(mrfdict)
+    ntimesteps = mrfdict.values.shape[1]
+    assert phi.shape == (ntimesteps, ntimesteps)
+    np.testing.assert_allclose(phi @ phi.conj().T, np.eye(ntimesteps), atol=1e-6)  # orthonormal rows
+
+    # the default fat fractions span the whole [0, 1] range used for matching, pure water included
+    default_ffs = inspect.signature(build_phi).parameters["FFs"].default
+    assert default_ffs[0] == 0.0 and default_ffs[-1] == pytest.approx(1.0)
+
+    # pure water and pure fat fingerprints are well represented by the first components
+    basis = phi[:6]
+    for component in (0, 1):
+        x = mrfdict.values[:, :, component]
+        residual = np.linalg.norm(x - (x @ basis.T.conj()) @ basis, axis=1) / np.linalg.norm(x, axis=1)
+        assert residual.mean() < 0.1, component
 
 
 def test_generate_dictionaries_with_temporal_basis(tmp_path):
