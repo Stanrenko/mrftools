@@ -148,7 +148,7 @@ pytest
 
 ## Changes
 
-### 2.0.0
+### 1.0.0
 - Dictionary generation: echo spacing and inversion time read from the raw data (`generate_dico --datafile`), TI option no longer ignored, ICE binary dictionary and IDEA sequence files (`--siemens`, `generate_ice_dico`)
 - Matching: configurable clustering windows and parameter names stored in the dictionary header; fix of the low fat fraction clustered matching (was run with the high fat fraction logic), of the clustering window selection, and of fat fraction groups containing a single voxel
 - Temporal basis built from water/fat mixtures including pure water (fat fraction 0 to 1)
