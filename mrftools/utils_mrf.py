@@ -565,6 +565,26 @@ def match_signals_v2(all_signals,keys,pca_water,pca_fat,array_water_unique,array
 
 
 
+def select_keys_in_clustering_window(keys, center, param_names, clustering_windows, xp=np):
+    '''
+    Selects the dictionary entries whose parameters lie within the clustering window around a cluster center
+    inputs:
+    keys - (nb_entries, nb_params) array of dictionary parameters, columns ordered as param_names
+    center - (nb_params,) parameters of the cluster center
+    param_names - names of the columns of keys
+    clustering_windows - dict param_name -> half-width of the window (parameters absent from it are not restricted)
+    xp - array module (numpy or cupy)
+    outputs:
+    boolean mask of shape (nb_entries,)
+    '''
+    retained_keys = xp.ones(keys.shape[0], dtype=bool)
+    for i, param in enumerate(param_names):
+        if param in clustering_windows:
+            d_param = clustering_windows[param]
+            retained_keys &= (keys[:, i] < center[i] + d_param) & (keys[:, i] > center[i] - d_param)
+    return retained_keys
+
+
 def match_signals_v2_clustered_on_dico(all_signals_current,keys,pca_water,pca_fat,transformed_array_water_unique,transformed_array_fat_unique,var_w_total,var_f_total,sig_wf_total,index_water_unique,index_fat_unique,useGPU_dictsearch,unique_keys,labels,split,param_names=("wT1","fT1","attB1","df"),clustering_windows=DEFAULT_CLUSTERING_WINDOWS,high_ff=False,return_cost=False):
 
     nb_clusters = unique_keys.shape[-1]
@@ -592,15 +612,7 @@ def match_signals_v2_clustered_on_dico(all_signals_current,keys,pca_water,pca_fa
             nb_signals_cluster=len(indices)
             num_group = int(nb_signals_cluster / split) + 1
 
-            for i,param in enumerate(param_names):
-                if param in clustering_windows.keys():
-                    d_param=clustering_windows[param]
-                    current_retained_keys=(keys[:, i] < unique_keys[:, cl][i] + d_param) & ((keys[:, i] > unique_keys[:, cl][i] - d_param))
-                    if i==0:
-                        retained_keys=current_retained_keys
-                    else:
-                        retained_keys=retained_keys & current_retained_keys
-            
+            retained_keys = select_keys_in_clustering_window(keys, unique_keys[:, cl], param_names, clustering_windows, xp=np)
             retained_signals = np.argwhere(retained_keys).flatten()
 
 
@@ -719,15 +731,7 @@ def match_signals_v2_clustered_on_dico(all_signals_current,keys,pca_water,pca_fa
             num_group = int(nb_signals_cluster / split) + 1
 
 
-            for i,param in enumerate(param_names):
-                if param in clustering_windows.keys():
-                    d_param=clustering_windows[param]
-                    current_retained_keys=(keys[:, i] < unique_keys[:, cl][i] + d_param) & ((keys[:, i] > unique_keys[:, cl][i] - d_param))
-                    if i==0:
-                        retained_keys=current_retained_keys
-                    else:
-                        retained_keys=retained_keys & current_retained_keys
-            
+            retained_keys = select_keys_in_clustering_window(keys, unique_keys[:, cl], param_names, clustering_windows, xp=cp)
             retained_signals = cp.argwhere(retained_keys).flatten()
 
             var_w = var_w_total[retained_signals]
@@ -1256,9 +1260,10 @@ class SimpleDictSearch(Optimizer):
 
             ind_high_ff = np.argwhere(all_maps_bc_cf_light[0][0]["ff"] >= threshold_ff)
             ind_low_ff = np.argwhere(all_maps_bc_cf_light[0][0]["ff"] < threshold_ff)
-            all_maps_low_ff = np.array([all_maps_bc_cf_light[0][0][k][ind_low_ff] for k in list(all_maps_bc_cf_light[0][0].keys())[:-1]]).squeeze()
-            all_maps_high_ff = np.array([all_maps_bc_cf_light[0][0][k][ind_high_ff] for k in
-                                         list(all_maps_bc_cf_light[0][0].keys())[:-1]]).squeeze()
+            # (nb_params, nb_signals) - reshape rather than squeeze so that a group with a single signal stays 2D
+            param_keys_light = list(all_maps_bc_cf_light[0][0].keys())[:-1]
+            all_maps_low_ff = np.array([all_maps_bc_cf_light[0][0][k][ind_low_ff] for k in param_keys_light]).reshape(len(param_keys_light), -1)
+            all_maps_high_ff = np.array([all_maps_bc_cf_light[0][0][k][ind_high_ff] for k in param_keys_light]).reshape(len(param_keys_light), -1)
             unique_keys, labels = np.unique(all_maps_low_ff, axis=-1, return_inverse=True)
             #nb_clusters = unique_keys.shape[-1]
             unique_keys_high_ff, labels_high_ff = np.unique(all_maps_high_ff, axis=-1, return_inverse=True)
@@ -1295,12 +1300,12 @@ class SimpleDictSearch(Optimizer):
                                                                                                                                      index_fat_unique,
                                                                                                                                      useGPU_dictsearch,
                                                                                                                                      unique_keys, labels,
-                                                                                                                                     split, param_names,clustering_windows,False,return_cost=True)
+                                                                                                                                     split, param_names=param_names,clustering_windows=clustering_windows,high_ff=False,return_cost=True)
 
             else:
                 idx_max_all_unique_low_ff,alpha_optim_low_ff=match_signals_v2_clustered_on_dico(all_signals_low_ff, keys, pca_water, pca_fat, transformed_array_water_unique,
                                                                                                 transformed_array_fat_unique, var_w_total, var_f_total, sig_wf_total,
-                                                                                                index_water_unique, index_fat_unique, useGPU_dictsearch, unique_keys, labels,split,param_names,clustering_windows,clustering_windows,False)
+                                                                                                index_water_unique, index_fat_unique, useGPU_dictsearch, unique_keys, labels,split,param_names=param_names,clustering_windows=clustering_windows,high_ff=False)
 
 
 
@@ -1308,11 +1313,11 @@ class SimpleDictSearch(Optimizer):
                 idx_max_all_unique_high_ff, alpha_optim_high_ff,J_optim_high_ff,phase_optim_high_ff = match_signals_v2_clustered_on_dico(
                     all_signals_high_ff, keys, pca_water, pca_fat, transformed_array_water_unique,
                     transformed_array_fat_unique, var_w_total, var_f_total, sig_wf_total,
-                    index_water_unique, index_fat_unique, useGPU_dictsearch, unique_keys_high_ff, labels_high_ff,split,param_names,clustering_windows, True,return_cost=True)
+                    index_water_unique, index_fat_unique, useGPU_dictsearch, unique_keys_high_ff, labels_high_ff,split,param_names=param_names,clustering_windows=clustering_windows,high_ff=True,return_cost=True)
             else:
                 idx_max_all_unique_high_ff,alpha_optim_high_ff=match_signals_v2_clustered_on_dico(all_signals_high_ff, keys, pca_water, pca_fat, transformed_array_water_unique,
                                                                                                   transformed_array_fat_unique, var_w_total, var_f_total, sig_wf_total,
-                                                                                                  index_water_unique, index_fat_unique, useGPU_dictsearch, unique_keys_high_ff, labels_high_ff,split,param_names,clustering_windows,True)
+                                                                                                  index_water_unique, index_fat_unique, useGPU_dictsearch, unique_keys_high_ff, labels_high_ff,split,param_names=param_names,clustering_windows=clustering_windows,high_ff=True)
 
 
 
