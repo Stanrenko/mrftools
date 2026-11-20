@@ -25,9 +25,17 @@ except:
 from . import io_twixt
 from .dictmodel import Dictionary
 
+
 np.bool=np.bool_
 asca = np.ascontiguousarray
 
+
+DEFAULT_CLUSTERING_WINDOWS={
+    "wT1":400,
+    "fT1":100,
+    "df":0.03,
+    "attB1":0.2
+}
 
 class PCAComplex(BaseEstimator,TransformerMixin):
 
@@ -148,7 +156,7 @@ def build_phi(mrfdict,FFs=np.arange(0.1,1.09,0.1)):
 
 
 
-def match_signals_v2(all_signals,keys,pca_water,pca_fat,array_water_unique,array_fat_unique,transformed_array_water_unique,transformed_array_fat_unique,var_w,var_f,sig_wf,pca,index_water_unique,index_fat_unique,remove_duplicates,verbose,split,useGPU_dictsearch,mask,return_matched_signals=False):
+def match_signals_v2(all_signals,keys,pca_water,pca_fat,array_water_unique,array_fat_unique,transformed_array_water_unique,transformed_array_fat_unique,var_w,var_f,sig_wf,pca,index_water_unique,index_fat_unique,remove_duplicates,verbose,split,useGPU_dictsearch,param_names=("wT1","fT1","attB1","df"),return_matched_signals=False):
 
     nb_signals = all_signals.shape[1]
 
@@ -541,17 +549,8 @@ def match_signals_v2(all_signals,keys,pca_water,pca_fat,array_water_unique,array
 
     del params_all_unique
 
-    map_rebuilt = {
-        "wT1": params_all[:, 0],
-        "fT1": params_all[:, 1],
-        "attB1": params_all[:, 2],
-        "df": params_all[:, 3],
-        "ff": params_all[:, 4]
-
-    }
-
-
-
+    map_rebuilt=dict(zip(param_names, np.transpose(params_all[:,:-1])))
+    map_rebuilt["ff"]=params_all[:,-1]
     
     if return_matched_signals:
         matched_signals=array_water_unique[index_water_unique, :][idx_max_all_unique, :].T * (
@@ -566,7 +565,27 @@ def match_signals_v2(all_signals,keys,pca_water,pca_fat,array_water_unique,array
 
 
 
-def match_signals_v2_clustered_on_dico(all_signals_current,keys,pca_water,pca_fat,transformed_array_water_unique,transformed_array_fat_unique,var_w_total,var_f_total,sig_wf_total,index_water_unique,index_fat_unique,useGPU_dictsearch,unique_keys,d_T1,d_fT1,d_B1,d_DF,labels,split,high_ff=False,return_cost=False):
+def select_keys_in_clustering_window(keys, center, param_names, clustering_windows, xp=np):
+    '''
+    Selects the dictionary entries whose parameters lie within the clustering window around a cluster center
+    inputs:
+    keys - (nb_entries, nb_params) array of dictionary parameters, columns ordered as param_names
+    center - (nb_params,) parameters of the cluster center
+    param_names - names of the columns of keys
+    clustering_windows - dict param_name -> half-width of the window (parameters absent from it are not restricted)
+    xp - array module (numpy or cupy)
+    outputs:
+    boolean mask of shape (nb_entries,)
+    '''
+    retained_keys = xp.ones(keys.shape[0], dtype=bool)
+    for i, param in enumerate(param_names):
+        if param in clustering_windows:
+            d_param = clustering_windows[param]
+            retained_keys &= (keys[:, i] < center[i] + d_param) & (keys[:, i] > center[i] - d_param)
+    return retained_keys
+
+
+def match_signals_v2_clustered_on_dico(all_signals_current,keys,pca_water,pca_fat,transformed_array_water_unique,transformed_array_fat_unique,var_w_total,var_f_total,sig_wf_total,index_water_unique,index_fat_unique,useGPU_dictsearch,unique_keys,labels,split,param_names=("wT1","fT1","attB1","df"),clustering_windows=DEFAULT_CLUSTERING_WINDOWS,high_ff=False,return_cost=False):
 
     nb_clusters = unique_keys.shape[-1]
 
@@ -593,11 +612,8 @@ def match_signals_v2_clustered_on_dico(all_signals_current,keys,pca_water,pca_fa
             nb_signals_cluster=len(indices)
             num_group = int(nb_signals_cluster / split) + 1
 
-            keys_T1 = (keys[:, 0] < unique_keys[:, cl][0] + d_T1) & ((keys[:, 0] > unique_keys[:, cl][0] - d_T1))
-            keys_fT1 = (keys[:, 1] < unique_keys[:, cl][1] + d_fT1) & ((keys[:, 1] > unique_keys[:, cl][1] - d_fT1))
-            keys_B1 = (keys[:, 2] < unique_keys[:, cl][2] + d_B1) & ((keys[:, 2] > unique_keys[:, cl][2] - d_B1))
-            keys_DF = (keys[:, 3] < unique_keys[:, cl][3] + d_DF) & ((keys[:, 3] > unique_keys[:, cl][3] - d_DF))
-            retained_signals = np.argwhere(keys_T1 & keys_fT1 & keys_B1 & keys_DF).flatten()
+            retained_keys = select_keys_in_clustering_window(keys, unique_keys[:, cl], param_names, clustering_windows, xp=np)
+            retained_signals = np.argwhere(retained_keys).flatten()
 
 
             var_w = var_w_total[retained_signals]
@@ -715,11 +731,8 @@ def match_signals_v2_clustered_on_dico(all_signals_current,keys,pca_water,pca_fa
             num_group = int(nb_signals_cluster / split) + 1
 
 
-            keys_T1 = (keys[:, 0] < unique_keys[:, cl][0] + d_T1) & ((keys[:, 0] > unique_keys[:, cl][0] - d_T1))
-            keys_fT1 = (keys[:, 1] < unique_keys[:, cl][1] + d_fT1) & ((keys[:, 1] > unique_keys[:, cl][1] - d_fT1))
-            keys_B1 = (keys[:, 2] < unique_keys[:, cl][2] + d_B1) & ((keys[:, 2] > unique_keys[:, cl][2] - d_B1))
-            keys_DF = (keys[:, 3] < unique_keys[:, cl][3] + d_DF) & ((keys[:, 3] > unique_keys[:, cl][3] - d_DF))
-            retained_signals = cp.argwhere(keys_T1 & keys_fT1 & keys_B1 & keys_DF).flatten()
+            retained_keys = select_keys_in_clustering_window(keys, unique_keys[:, cl], param_names, clustering_windows, xp=cp)
+            retained_signals = cp.argwhere(retained_keys).flatten()
 
             var_w = var_w_total[retained_signals]
             var_f = var_f_total[retained_signals]
@@ -859,7 +872,7 @@ class Optimizer(object):
 
 class SimpleDictSearch(Optimizer):
 
-    def __init__(self,seq=None,split=500,pca=True,threshold_pca=15,useGPU_dictsearch=False,remove_duplicate_signals=False,threshold=None,return_matched_signals=False,volumes_type="raw",**kwargs):
+    def __init__(self,seq=None,split=500,pca=True,threshold_pca=15,useGPU_dictsearch=False,remove_duplicate_signals=False,threshold=None,return_matched_signals=False,volumes_type="raw",clustering_windows=DEFAULT_CLUSTERING_WINDOWS,**kwargs):
         
         super().__init__(**kwargs)
         self.paramDict["split"] = split
@@ -876,6 +889,7 @@ class SimpleDictSearch(Optimizer):
             raise ValueError('volumes_type must be either "singular" or "raw".')
         
         self.paramDict["volumes_type"]=volumes_type
+        self.paramDict["clustering_windows"]=clustering_windows
 
 
     def search_patterns_test_multi(self, dicofull_file, volumes, retained_timesteps=None):
@@ -919,6 +933,12 @@ class SimpleDictSearch(Optimizer):
 
         with open(dicofull_file, "rb") as file:
             dicofull = pickle.load(file)
+
+        if "param_names" in dicofull["hdr_light"].keys():
+            param_names=dicofull["hdr_light"]["param_names"]
+
+        else:
+            param_names=("wT1","fT1","attB1","df")
 
         if volumes_type == "raw":
             mrfdict = dicofull["mrfdict_light"]
@@ -1018,7 +1038,7 @@ class SimpleDictSearch(Optimizer):
                                                                  transformed_array_water_unique,
                                                                  transformed_array_fat_unique, var_w, var_f,
                                                                  sig_wf, pca, index_water_unique,
-                                                                 index_fat_unique, remove_duplicates, verbose,split, useGPU_dictsearch, mask
+                                                                 index_fat_unique, remove_duplicates, verbose,split, useGPU_dictsearch, param_names=param_names
                                                                  )
         else:
             map_rebuilt, J_optim, phase_optim, matched_signals = match_signals_v2(all_signals, keys, pca_water,
@@ -1031,7 +1051,7 @@ class SimpleDictSearch(Optimizer):
                                                                                   pca, index_water_unique,
                                                                                   index_fat_unique,
                                                                                   remove_duplicates, verbose, split,
-                                                                                  useGPU_dictsearch, mask,                                                                            
+                                                                                  useGPU_dictsearch, param_names=param_names,                                                                            
                                                                                   return_matched_signals=True)
 
 
@@ -1098,6 +1118,7 @@ class SimpleDictSearch(Optimizer):
 
         useGPU_dictsearch = self.paramDict["useGPU_dictsearch"]
 
+        clustering_windows=self.paramDict["clustering_windows"]
 
         # if pca and (type(dictfile)==dict):
         #     pca_file = str.split(dictfile, ".dict")[0] + "_{}pca.pkl".format(threshold_pca)
@@ -1126,6 +1147,13 @@ class SimpleDictSearch(Optimizer):
 
         with open(dicofull_file, "rb") as file:
                 dicofull = pickle.load(file)
+
+
+        if "param_names" in dicofull["hdr"].keys():
+            param_names=dicofull["hdr"]["param_names"]
+
+        else:
+            param_names=("wT1","fT1","attB1","df")
 
         if volumes_type == "raw":
             
@@ -1232,9 +1260,10 @@ class SimpleDictSearch(Optimizer):
 
             ind_high_ff = np.argwhere(all_maps_bc_cf_light[0][0]["ff"] >= threshold_ff)
             ind_low_ff = np.argwhere(all_maps_bc_cf_light[0][0]["ff"] < threshold_ff)
-            all_maps_low_ff = np.array([all_maps_bc_cf_light[0][0][k][ind_low_ff] for k in list(all_maps_bc_cf_light[0][0].keys())[:-1]]).squeeze()
-            all_maps_high_ff = np.array([all_maps_bc_cf_light[0][0][k][ind_high_ff] for k in
-                                         list(all_maps_bc_cf_light[0][0].keys())[:-1]]).squeeze()
+            # (nb_params, nb_signals) - reshape rather than squeeze so that a group with a single signal stays 2D
+            param_keys_light = list(all_maps_bc_cf_light[0][0].keys())[:-1]
+            all_maps_low_ff = np.array([all_maps_bc_cf_light[0][0][k][ind_low_ff] for k in param_keys_light]).reshape(len(param_keys_light), -1)
+            all_maps_high_ff = np.array([all_maps_bc_cf_light[0][0][k][ind_high_ff] for k in param_keys_light]).reshape(len(param_keys_light), -1)
             unique_keys, labels = np.unique(all_maps_low_ff, axis=-1, return_inverse=True)
             #nb_clusters = unique_keys.shape[-1]
             unique_keys_high_ff, labels_high_ff = np.unique(all_maps_high_ff, axis=-1, return_inverse=True)
@@ -1256,10 +1285,7 @@ class SimpleDictSearch(Optimizer):
             all_signals_low_ff = all_signals[:, ind_low_ff.flatten()]
             all_signals_high_ff = all_signals[:, ind_high_ff.flatten()]
 
-            d_T1 = 400
-            d_fT1 = 100
-            d_B1 = 0.2
-            d_DF = 0.030  # 0.015
+
 
             if return_cost:
                 idx_max_all_unique_low_ff, alpha_optim_low_ff,J_optim_low_ff,phase_optim_low_ff = match_signals_v2_clustered_on_dico(all_signals_low_ff,
@@ -1273,34 +1299,25 @@ class SimpleDictSearch(Optimizer):
                                                                                                                                      index_water_unique,
                                                                                                                                      index_fat_unique,
                                                                                                                                      useGPU_dictsearch,
-                                                                                                                                     unique_keys, d_T1,
-                                                                                                                                     d_fT1,
-                                                                                                                                     d_B1, d_DF, labels,
-                                                                                                                                     split, False,return_cost=True)
+                                                                                                                                     unique_keys, labels,
+                                                                                                                                     split, param_names=param_names,clustering_windows=clustering_windows,high_ff=False,return_cost=True)
 
             else:
                 idx_max_all_unique_low_ff,alpha_optim_low_ff=match_signals_v2_clustered_on_dico(all_signals_low_ff, keys, pca_water, pca_fat, transformed_array_water_unique,
                                                                                                 transformed_array_fat_unique, var_w_total, var_f_total, sig_wf_total,
-                                                                                                index_water_unique, index_fat_unique, useGPU_dictsearch, unique_keys, d_T1, d_fT1,
-                                                                                                d_B1, d_DF, labels,split,False)
+                                                                                                index_water_unique, index_fat_unique, useGPU_dictsearch, unique_keys, labels,split,param_names=param_names,clustering_windows=clustering_windows,high_ff=False)
 
-            d_T1 = 400
-            d_fT1 = 100
-            d_B1 = 0.2
-            d_DF = 0.030  # 0.015
 
 
             if return_cost:
                 idx_max_all_unique_high_ff, alpha_optim_high_ff,J_optim_high_ff,phase_optim_high_ff = match_signals_v2_clustered_on_dico(
                     all_signals_high_ff, keys, pca_water, pca_fat, transformed_array_water_unique,
                     transformed_array_fat_unique, var_w_total, var_f_total, sig_wf_total,
-                    index_water_unique, index_fat_unique, useGPU_dictsearch, unique_keys_high_ff, d_T1, d_fT1,
-                    d_B1, d_DF, labels_high_ff, split, True,return_cost=True)
+                    index_water_unique, index_fat_unique, useGPU_dictsearch, unique_keys_high_ff, labels_high_ff,split,param_names=param_names,clustering_windows=clustering_windows,high_ff=True,return_cost=True)
             else:
                 idx_max_all_unique_high_ff,alpha_optim_high_ff=match_signals_v2_clustered_on_dico(all_signals_high_ff, keys, pca_water, pca_fat, transformed_array_water_unique,
                                                                                                   transformed_array_fat_unique, var_w_total, var_f_total, sig_wf_total,
-                                                                                                  index_water_unique, index_fat_unique, useGPU_dictsearch, unique_keys_high_ff, d_T1, d_fT1,
-                                                                                                  d_B1, d_DF, labels_high_ff,split,True)
+                                                                                                  index_water_unique, index_fat_unique, useGPU_dictsearch, unique_keys_high_ff, labels_high_ff,split,param_names=param_names,clustering_windows=clustering_windows,high_ff=True)
 
 
 
@@ -1336,14 +1353,16 @@ class SimpleDictSearch(Optimizer):
 
             params_all_unique = np.array(
                 [keys_for_map[idx] + (alpha_optim[l],) for l, idx in enumerate(idx_max_all_unique.astype(int))])
-            map_rebuilt = {
-                "wT1": params_all_unique[:, 0],
-                "fT1": params_all_unique[:, 1],
-                "attB1": params_all_unique[:, 2],
-                "df": params_all_unique[:, 3],
-                "ff": params_all_unique[:, 4]
+            map_rebuilt=dict(zip(param_names, np.transpose(params_all_unique[:,:-1])))
+            map_rebuilt["ff"]=params_all_unique[:,-1]
+            # map_rebuilt = {
+            #     "wT1": params_all_unique[:, 0],
+            #     "fT1": params_all_unique[:, 1],
+            #     "attB1": params_all_unique[:, 2],
+            #     "df": params_all_unique[:, 3],
+            #     "ff": params_all_unique[:, 4]
 
-            }
+            # }
             if return_cost:
                 if not(return_matched_signals):
                     values_results.append((map_rebuilt, mask,J_optim,phase_optim,rho_optim))
@@ -1630,8 +1649,7 @@ def simulate_radial_undersampled_images_multi(kdata, trajectory, size, density_a
 
     if not (len(kdata[0]) == len(traj)):
         kdata = kdata.reshape(nb_channels, len(traj), -1)
-
-
+    
     #print(traj[0].shape)
     npoint = trajectory.paramDict["npoint"]
     nb_allspokes = trajectory.paramDict["total_nspokes"]
@@ -1712,20 +1730,29 @@ def simulate_radial_undersampled_images_multi(kdata, trajectory, size, density_a
 
     print("Performing NUFFT")
     if traj[0].shape[-1] == 2:  # 2D
-
+        
+        print(kdata.shape)
         for i, t in tqdm(enumerate(traj)):
+
             fk = finufft.nufft2d1(asca(t[:, 0]), asca(t[:, 1]), asca(np.squeeze(kdata[:, i, :])), size)
 
             # images_series_rebuilt = np.moveaxis(images_series_rebuilt, 0, 1)
+            # print(b1)
+            # print("b1 shape".format(b1.shape) if b1 is not None else "b1 is None")
+            # print("fk shape {}".format(fk.shape))
+            # print("images_series_rebuilt shape {}".format(images_series_rebuilt.shape))
             if b1 is None:
-                print(fk.shape)
+                
                 if fk.ndim>2:
                     images_series_rebuilt[i] = np.sqrt(np.sum(np.abs(fk) ** 2, axis=0))
                 else:
                     print('Taking abs of image')
                     images_series_rebuilt[i]=np.abs(fk)
             else:
-                images_series_rebuilt[i] = np.sum(b1.conj() * fk, axis=0)
+
+                # if curr_image.ndim < images_series_rebuilt[i].ndim:
+                #     curr_image=np.expand_dims(curr_image,axis=0)
+                images_series_rebuilt[i] = np.sum(b1.conj().squeeze() * fk, axis=0)
 
     elif traj[0].shape[-1] == 3:  # 3D
         if not (useGPU):
@@ -2019,6 +2046,7 @@ def build_mask_single_image_multichannel(kdata,trajectory,image_size,b1=None,den
     else:
         trajectory_for_mask = trajectory
 
+    print("Building image for mask")
     if (selected_spokes is not None):
         volume_rebuilt = build_single_image_multichannel(kdata[:,selected_spokes,:,:],trajectory_for_mask,image_size,density_adj,eps,b1,useGPU=useGPU,light_memory_usage=light_memory_usage,is_theta_z_adjusted=is_theta_z_adjusted,normalize_volumes=normalize_volumes)
     else:
@@ -2059,7 +2087,7 @@ def convertArrayToImageHelper(dico,data,apply_offset=False,reorient=True):
     spacing=dico["spacing"]
     origin=dico["origin"]
     orientation=dico["orientation"]
-    is3D=dico["is3D"]
+
 
     if apply_offset:
 
@@ -2098,6 +2126,51 @@ def convertArrayToImageHelper(dico,data,apply_offset=False,reorient=True):
     
     return data,geom
 
+
+
+def convertArrayToImageHelperDicom(dico,data,apply_offset=False,reorient=True):
+
+    spacing=dico["spacing"]
+    origin=dico["origin"]
+    orientation=dico["orientation"]
+
+
+    if apply_offset:
+
+        offset=dico["offset"]
+        print("Applying offset {}".format(offset))
+        
+        origin=np.array(origin)
+        origin[-1]=origin[-1]+offset
+        origin=tuple(origin)
+    
+
+    geom={"origin":origin,"spacing":spacing}
+    # print(geom)
+
+    if data.ndim==2:
+        data=data[None,...]
+    # print(data.shape)
+    
+    # curr_map=np.flip(np.moveaxis(curr_map,0,2),axis=(0,1,2))
+
+    if reorient:
+        print("Reorienting input volume")
+        offset=data.ndim-3
+        if orientation=="coronal":
+            print("WARNING: coronal orientation not tested - should be checked")
+            data=np.flip(np.moveaxis(data,(offset,offset+1,offset+2),(offset+1,offset+2,offset)),axis=(offset,offset+1))
+                #data=np.moveaxis(data,0,2)
+        elif orientation=="transversal":
+                # data=np.moveaxis(data,offset,offset+2)
+            data=np.moveaxis(data,offset+1,offset+2)
+            # data=np.flip(np.moveaxis(data,offset+1,offset+2))
+        elif orientation=="sagittal":
+                # data=np.moveaxis(data,offset,offset+2)
+            print("WARNING: sagittal orientation not tested - should be checked")
+            data=np.flip(np.moveaxis(data,(offset,offset+1,offset+2),(offset,offset+2,offset+1)))
+    
+    return data,geom
 
 
 def cutup(data, blck, strd):
@@ -2448,3 +2521,4 @@ def compress_dictionary(dico,phi,L0):
     dico["mrfdict_light_L0{}".format(L0)]=(array_water_light_projected,array_fat_light_projected,keys_light)
     dico["mrfdict_L0{}".format(L0)]=(array_water_projected,array_fat_projected,keys)
     return dico
+

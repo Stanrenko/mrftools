@@ -23,7 +23,8 @@ if __name__ == '__main__':
              "build_masks":build_masks,
              "build_masks_singular":build_mask_from_singular_volume,
              "build_maps":build_maps,
-             "generate_dico":generate_dictionaries
+             "generate_dico":generate_dictionaries,
+             "generate_ice_dico":generate_ice_dictionary
              }
 
     parser = argparse.ArgumentParser()
@@ -74,6 +75,7 @@ if __name__ == '__main__':
     parser_maps.add_argument('--volumestype', type=str,nargs='?', const="raw", default="raw")
 
     parser_dico = subparsers.add_parser('generate_dico')
+    parser_dico.add_argument('--datafile', type=str, default=None)
     parser_dico.add_argument('--dictdir', type=str, default='./mrf_dict')
     parser_dico.add_argument('--sequencefile', type=str,nargs='?', const=None, default=None)
     parser_dico.add_argument('--dictconf', type=str,nargs='?', const=None, default=None)
@@ -84,6 +86,13 @@ if __name__ == '__main__':
     parser_dico.add_argument('--isbuildphi', type=bool,nargs='?', const=False, default=False) 
     parser_dico.add_argument('--force', type=bool,nargs='?', const=False, default=False) 
     parser_dico.add_argument('--pca', type=int,nargs='?', const=6, default=6)
+    parser_dico.add_argument('--siemens', type=bool,nargs='?', const=False, default=False)
+    parser_dico.add_argument('--suffix', type=str, default=None)
+
+
+    parser_ice_dico = subparsers.add_parser('generate_ice_dico')
+    parser_ice_dico.add_argument('--dicofullfile', type=str, default=None)
+    parser_ice_dico.add_argument('--pca', type=int,nargs='?', const=10, default=10)
     
     
     args = parser.parse_args()
@@ -294,28 +303,53 @@ if __name__ == '__main__':
         
         # dictfile_light=dico_full_with_hdr["dictfile_light"]
         dico_hdr=dico_full_with_hdr["hdr"]
-        
+        clustering_windows={
+            "wT1":600,
+            "fT1":100,
+            "df":0.03,
+            "attB1":0.25
+        }
+
+        print("Clustering  windows : {}".format(clustering_windows))
+
         check_dico(dico_hdr,file_seq)
-        all_maps=build_maps(volumes,masks,dictfiles,split=split,pca=pca,useGPU=useGPU,return_cost=return_cost,volumes_type=volumes_type)
+        all_maps=build_maps(volumes,masks,dictfiles,split=split,pca=pca,useGPU=useGPU,return_cost=return_cost,volumes_type=volumes_type,clustering_windows=clustering_windows)
         save_maps(all_maps,file_seq)
 
     elif args.command=="generate_dico":
+
+        if args.datafile is None:
+            if args.echospacing is None:
+                raise ValueError("Echo spacing should be provided when no datafile is given")
+            min_TR_delay=args.echospacing
+            TI=args.TI
+        else:
+            import numpy as np
+            seq_params = build_dico_seqParams(str(args.datafile))
+            min_TR_delay=np.round(seq_params["dTR"],2)
+            TI=np.round(seq_params["TI"],2)
+
+            print("Echo spacing of {} ms read in the .dat file".format(min_TR_delay))
+            print("Inversion time of {} ms read in the .dat file".format(TI))
         dictdir = pathlib.Path(args.dictdir)
         sequence_file= args.sequencefile
         reco=args.reco
-        min_TR_delay=args.echospacing
         dictconf=args.dictconf
         dictconf_light=args.dictconflight
-        TI=args.TI
-        is_build_phi=args.isbuildphi
+        is_build_phi=bool(args.isbuildphi)
         force=args.force
         L0=int(args.pca)
+        generate_siemens_files=bool(args.siemens)
+        idea_files_suffix=args.suffix
+        
+
+
 
         if sequence_file is None:
             print("No sequence config was given - using default SEQ_CONFIG")
             sequence_file=SEQ_CONFIG
         if dictconf is None:
-            print("No dict config was given - using default DICT_LIGHT")
+            print("No dict config was given - using default DICT_CONFIG")
             dictconf=DICT_CONFIG
         if dictconf_light is None:
             print("No dict light config was given - using default DICT_LIGHT_CONFIG")
@@ -326,7 +360,18 @@ if __name__ == '__main__':
             parser.exit()
         dictdir.mkdir(parents=True, exist_ok=True)
 
-        generate_dictionaries(sequence_file,reco,min_TR_delay,dictconf,dictconf_light,TI=8.32, dest=dictdir,is_build_phi=is_build_phi,L0=L0)
+        generate_dictionaries(sequence_file,reco,min_TR_delay,dictconf,dictconf_light,TI=TI, dest=dictdir,is_build_phi=is_build_phi,L0=L0,generate_siemens_files=generate_siemens_files,idea_files_suffix=idea_files_suffix)
+
+
+    elif args.command=="generate_ice_dico":
+        dicofull_file = args.dicofullfile
+        if dicofull_file is None:
+            raise ValueError("No dictionary file provided. Please provide a dictionary file to generate the ICE dictionary.")
+        pca=int(args.pca)
+        generate_ice_dictionary(dicofull_file,threshold_pca=pca)
+        
+
+    
 
     else:
         raise("Value Error : Unknown Function")
