@@ -88,7 +88,7 @@ def correlation(a, b):
 def test_extract_data_density_adjustment(monkeypatch, dens_adj):
     raw = np.ones((1, 2, 3, 8), dtype=np.complex64)
     params = {"dTR": 1.11}
-    monkeypatch.setattr(mf, "read_rawdata_2D", lambda filename: (raw.copy(), params))
+    monkeypatch.setattr(mf, "read_rawdata_2D", lambda filename, **kwargs: (raw.copy(), params))
 
     data, seq_params = mf.extract_data("dummy.dat", dens_adj=dens_adj)
 
