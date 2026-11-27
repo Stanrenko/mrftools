@@ -1,0 +1,60 @@
+# Run the mutools-mrf test suite against the mrftools code of this PR / push,
+# so that a change in mrftools that breaks mutools-mrf is caught before merging.
+#
+# Requires two repository secrets (Settings > Secrets and variables > Actions):
+#   BITBUCKET_USER   Bitbucket username (or "x-token-auth" for a repository access token)
+#   BITBUCKET_TOKEN  app password / access token with read access to pbaudin/mutools-mrf
+# Secrets are not available to PRs opened from forks: this job fails for those.
+
+name: Downstream tests (mutools-mrf)
+
+on:
+  pull_request:
+  push:
+    branches: [main, dev]
+  workflow_dispatch:
+    inputs:
+      mutools_ref:
+        description: "mutools-mrf branch or tag to test"
+        default: "main"
+
+jobs:
+  mutools-mrf:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out mrftools (this PR)
+        uses: actions/checkout@v4
+        with:
+          path: mrftools
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"  # same as the mutools-mrf release environment
+          cache: pip
+          cache-dependency-path: mrftools/setup.cfg
+
+      - name: Clone mutools-mrf from Bitbucket
+        env:
+          BB_USER: ${{ secrets.BITBUCKET_USER }}
+          BB_TOKEN: ${{ secrets.BITBUCKET_TOKEN }}
+          REF: ${{ inputs.mutools_ref || 'main' }}
+        run: |
+          git clone --depth 1 --branch "$REF" \
+            "https://${BB_USER}:${BB_TOKEN}@bitbucket.org/pbaudin/mutools-mrf.git" mutools-mrf
+          git -C mutools-mrf log -1 --oneline
+
+      - name: Install mutools-mrf, then override mrftools with this checkout
+        run: |
+          python -m pip install --upgrade pip
+          # pulls the pinned mrftools release declared in mutools-mrf/setup.cfg ...
+          pip install "./mutools-mrf[test]"
+          # ... which is replaced here by the code under test
+          pip install --force-reinstall --no-deps ./mrftools
+          # installs any dependency newly required by this version of mrftools
+          pip install "./mrftools[test]"
+          pip show mrftools | grep -E "^(Version|Location)"
+          python -c "import mrftools, sys; print('mrftools imported from', mrftools.__file__)"
+
+      - name: Run mutools-mrf tests
+        working-directory: mutools-mrf
+        run: pytest -v
