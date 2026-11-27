@@ -13,18 +13,21 @@ from .image_series import MapFromDict
 
 
 
-def extract_data(filename,dens_adj=True):
-    ''' 
+def extract_data(filename,dens_adj=True,offcentre_phase="auto"):
+    '''
     Extracts data from raw data file
     inputs:
     filename - Siemens .dat file (str)
     dens_adj - whether to apply radial density adjustment (bool)
+    offcentre_phase - "auto" / "force" / "off": correction of the missing
+                      off-centre ADC phase (see corrections.py)
     outputs:
     data - numpy array containing k-space data nb_slices x nb_channels x nb_segments x npoint
-    dico_seqParams - dictionary containing sequence parameters
+    dico_seqParams - dictionary containing sequence parameters (incl. slice_geometry
+                     and offcentre_phase_report)
     '''
-    
-    data,dico_seqParams=read_rawdata_2D(filename)
+
+    data,dico_seqParams=read_rawdata_2D(filename,offcentre_phase=offcentre_phase)
 
     if dens_adj:
         
@@ -360,7 +363,40 @@ def build_maps(volumes_all_slices,masks_all_slices,dico_full_file,useGPU=True,sp
 
 
     
-def save_maps(all_maps, file_seqParams, keys = ["ff","wT1","attB1","df"]):
+def map_to_image(volume, dico_seqParams, grad_file=None, mask=None):
+    '''
+    Converts a 2D multi-slice map (nb_slices x npix x npix, slices in kdata order) into a SimpleITK image.
+    - full geometry (origin, spacing, direction) from the MDH slice geometry when available
+      (valid for oblique slices); legacy geometry otherwise (no direction).
+    - grad_file (optional): Siemens gradient coefficient file (coeff.grad) -> in-plane gradient
+      non-linearity correction of the map (as DIS2D). Only valid for the scanner the file belongs to.
+    returns: (image, info) with info = {"geometry": "mdh"|"legacy", "gradcorr": bool}
+    '''
+    info = {"geometry": "legacy", "gradcorr": False}
+    vol = np.asarray(volume)
+    has_geom = "slice_geometry" in dico_seqParams and not dico_seqParams.get("is3D", False) \
+        and len(dico_seqParams["slice_geometry"]) == vol.shape[0]
+    if grad_file is not None and has_geom:
+        from .gradnonlin import read_siemens_grad, correct_masked_maps_2d
+        m = (vol != 0) if mask is None else (np.asarray(mask) > 0)
+        vol, _ = correct_masked_maps_2d(
+            vol, m, dico_seqParams["slice_geometry"],
+            dico_seqParams["x_FOV"] / vol.shape[-1], read_siemens_grad(grad_file),
+            dico_seqParams.get("patient_position", "HFS"))
+        info["gradcorr"] = True
+    if has_geom:
+        arr, geom = oriented_image_from_slices(dico_seqParams, vol)
+        img = sitk.GetImageFromArray(arr)
+        img.SetSpacing(geom["spacing"]); img.SetOrigin(geom["origin"]); img.SetDirection(geom["direction"])
+        info["geometry"] = "mdh"
+    else:
+        arr, geom = convertArrayToImageHelper(dico_seqParams, vol, apply_offset=True)
+        img = sitk.GetImageFromArray(arr)
+        img.SetSpacing(geom["spacing"]); img.SetOrigin(geom["origin"])
+    return img, info
+
+
+def save_maps(all_maps, file_seqParams, keys = ["ff","wT1","attB1","df"], grad_file=None):
     '''
     generate the map images in .mha format for all params and stores the optimisation results in a .pkl
     inputs:
@@ -374,7 +410,8 @@ def save_maps(all_maps, file_seqParams, keys = ["ff","wT1","attB1","df"]):
 
     file_seqParams - file containing acquisition sequence parameters (.pkl)
     keys - parameters for which to generate the .mha
-    
+    grad_file - optional Siemens coeff.grad: in-plane gradient non-linearity correction (see map_to_image)
+
     outputs:
     '''
 
@@ -394,12 +431,8 @@ def save_maps(all_maps, file_seqParams, keys = ["ff","wT1","attB1","df"]):
                 
         map_rebuilt = all_maps[0][0]
         mask = all_maps[0][1]
-        map_all_slices = makevol(map_rebuilt[k], mask > 0)            
-        map_all_slices,geom=convertArrayToImageHelper(dico_seqParams,map_all_slices,apply_offset=True)
-        curr_volume=sitk.GetImageFromArray(map_all_slices)
-        
-        curr_volume.SetSpacing(geom["spacing"])
-        curr_volume.SetOrigin(geom["origin"])
+        map_all_slices = makevol(map_rebuilt[k], mask > 0)
+        curr_volume, _ = map_to_image(map_all_slices, dico_seqParams, grad_file=grad_file, mask=mask)
         
         file_map=os.path.join(path,"{}_map.mha".format(k))
         sitk.WriteImage(curr_volume,file_map,useCompression=True)

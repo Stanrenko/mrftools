@@ -23,6 +23,8 @@ except:
     print("Could not import cupy")
 
 from . import io_twixt
+from . import geometry
+from . import corrections
 from .dictmodel import Dictionary
 
 
@@ -1600,21 +1602,42 @@ def has_volume_geometry(header):
     fields = ['sKSpace.lBaseResolution']
     return all(field in header for field in fields)
 
-def read_rawdata_2D(filename):
+def read_rawdata_2D(filename, offcentre_phase="auto"):
+    '''
+    offcentre_phase - "auto" (detect and correct the missing off-centre ADC phase
+                      per slice, see corrections.py), "force" or "off"
+    '''
     dico_seqParams=build_dico_seqParams(filename)
     nb_segments=dico_seqParams["nb_segments"]
 
     twix = twixtools.read_twix(filename,parse_pmu=False)
     mdb_list = twix[-1]['mdb']
+    hdr = twix[-1]['hdr']
     data= []
     for i, mdb in enumerate(mdb_list):
         if mdb.is_image_scan():
             data.append(mdb)
 
+    # slice geometry from the MDH (acquisition order = slice order of the kdata array)
+    slice_geometry = geometry.slice_geometry_from_mdbs(
+        data, hdr["MeasYaps"].get("lScanRegionPosTra", 0.0))
+
     data = np.array([mdb.data for mdb in data])
 
     data = data.reshape((-1, int(nb_segments)) + data.shape[1:])
     data=np.moveaxis(data,2,1)
+
+    dico_seqParams["slice_geometry"] = slice_geometry
+    dico_seqParams["patient_position"] = hdr.get("Dicom", {}).get("tPatientPosition", "HFS")
+    if offcentre_phase != "off" and len(slice_geometry) == data.shape[0]:
+        yaps = hdr["MeasYaps"]
+        data, report = corrections.offcentre_phase_correction(
+            data, slice_geometry,
+            dwell_s=yaps["sRXSPEC"]["alDwellTime"][0] * 1e-9,
+            fov_mm=yaps["sSliceArray"]["asSlice"][0]["dReadoutFOV"],
+            base_resolution=yaps["sKSpace"]["lBaseResolution"],
+            mode=offcentre_phase)
+        dico_seqParams["offcentre_phase_report"] = report
 
     return data,dico_seqParams
 
@@ -2080,6 +2103,31 @@ def build_mask_single_image_multichannel(kdata,trajectory,image_size,b1=None,den
     return mask
 
 
+
+
+def oriented_image_from_slices(dico, data, reorient=True):
+    '''
+    2D multi-slice maps -> (array, geometry) with full ITK geometry
+    (origin, spacing, direction) computed from dico["slice_geometry"] (MDH).
+    data: (nb_slices, npix, npix) in reconstruction layout (slice, k_x/read, k_y/phase),
+          slices in kdata (acquisition) order.
+    The slices are sorted spatially along the normal, then the same
+    reorientation as convertArrayToImageHelper is applied to the data and to
+    the physical coordinates, so the geometry is consistent with the array
+    layout whatever the orientation (axial, coronal, sagittal, oblique).
+    '''
+    sg = dico["slice_geometry"]
+    order = geometry.spatial_order(sg)
+    data = np.asarray(data)[order]
+    sg = [sg[i] for i in order]
+    npix = data.shape[-1]
+    pixel_size = dico["x_FOV"] / npix
+    coords = geometry.physical_grid(sg, npix, pixel_size)          # (3, nsl, npix, npix)
+    data_r, _ = convertArrayToImageHelper(dico, data, apply_offset=False, reorient=reorient)
+    coords_r = np.stack([convertArrayToImageHelper(dico, coords[c], apply_offset=False,
+                                                   reorient=reorient)[0] for c in range(3)])
+    geom = geometry.affine_from_coordinates(coords_r)
+    return data_r, geom
 
 
 def convertArrayToImageHelper(dico,data,apply_offset=False,reorient=True):
